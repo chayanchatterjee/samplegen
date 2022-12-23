@@ -366,3 +366,5 @@ class SampleFile:
         # Or just return a single data frame containing both types of samples
         else:
             return df
+
+        
