@@ -93,21 +93,13 @@ def generate_sample(static_arguments,
         psd = aLIGOZeroDetHighPower(length=fd_length,
                                     delta_f=delta_f,
                                     low_freq_cutoff=f_lower)
-        
-        filename_LIGO = '/fred/oz016/Chayan/samplegen/utils/LIGO_O4_PSD.txt'
+
+        filename_LIGO = '/home/cchatterjee/samplegen/utils/LIGO_O4_PSD.txt'
         psd_LIGO = pycbc.psd.from_txt(filename_LIGO, fd_length, delta_f,
                          f_lower, is_asd_file=False)
-        
-        filename_Virgo = '/fred/oz016/Chayan/samplegen/utils/Virgo_O4_PSD.txt'
+
+        filename_Virgo = '/home/cchatterjee/samplegen/utils/Virgo_O4_PSD.txt'
         psd_Virgo = pycbc.psd.from_txt(filename_Virgo, fd_length, delta_f,
-                         f_lower, is_asd_file=False)
-        
-        filename_Virgo_design = '/fred/oz016/Chayan/samplegen/utils/Virgo_design.txt'
-        psd_Virgo_design = pycbc.psd.from_txt(filename_Virgo_design, fd_length, delta_f,
-                         f_lower, is_asd_file=False)
-        
-        filename_A_plus_design = '/fred/oz016/Chayan/samplegen/utils/A_plus_design.txt'
-        psd_A_plus_design = pycbc.psd.from_txt(filename_A_plus_design, fd_length, delta_f,
                          f_lower, is_asd_file=False)
 
         # Actually generate the noise using the PSD and LALSimulation
@@ -116,7 +108,7 @@ def generate_sample(static_arguments,
 
             # Compute the length of the noise sample in time steps
             noise_length = noise_interval_width * target_sampling_rate
-            
+
             if((det == 'H1') or (det == 'L1')):
             # Generate the noise for this detector
                 noise[det] = noise_from_psd(length=noise_length,
@@ -202,11 +194,7 @@ def generate_sample(static_arguments,
             snrs[det] = sigma(htilde=detector_signals[det],
                               psd=psds[det],
                               low_frequency_cutoff=f_lower)
-	
-#	print(snrs['H1'])
-#	print(snrs['L1'])
-#	print(snrs['V1'])
-	
+
         # Calculate the network optimal matched filtering SNR for this
         # injection (which we need for scaling to the chosen injection SNR)
         nomf_snr = np.sqrt(snrs['H1']**2 + snrs['L1']**2 + snrs['V1']**2)
@@ -226,7 +214,7 @@ def generate_sample(static_arguments,
             # factor to ensure that the resulting NOMF-SNR equals the chosen
             # injection SNR
 #            strain[det] = noise[det].add_into(scale_factor *
-                                              detector_signals[det])
+#                                              detector_signals[det])          # Change for SNR Variable
             
             strain[det] = noise[det].add_into(detector_signals[det])
 
@@ -241,7 +229,7 @@ def generate_sample(static_arguments,
                                 'v1_snr': snrs['V1']}
 
         # Also add the waveform parameters we have sampled
-        for key, value in waveform_params.iteritems():
+        for key, value in waveform_params.items():
             injection_parameters[key] = value
 
     # -------------------------------------------------------------------------
@@ -320,3 +308,4 @@ def generate_sample(static_arguments,
               'v1_strain': np.array(strain['V1']).astype(np.float32)}
 
     return sample, injection_parameters
+
