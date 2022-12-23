@@ -444,8 +444,8 @@ if __name__ == '__main__':
         sample_file_dict['injection_parameters'][key] = value
 
     # Construct the path for the output HDF file
-    output_dir = os.path.join('.', 'output')
-#    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/Distance_Variable/'
+#    output_dir = os.path.join('.', 'output')
+    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/SNR_Variable/' # change for SNR variable
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     sample_file_path = os.path.join(output_dir, config['output_file_name'])
