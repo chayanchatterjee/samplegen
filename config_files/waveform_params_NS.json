@@ -14,7 +14,7 @@ distance =
 coa_phase =
 inclination =
 polarization =
-injection_snr =
+#injection_snr =
 
 
 [static_args]
