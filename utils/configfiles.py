@@ -96,3 +96,4 @@ def read_json_config(file_path):
                        '{}'.format(', '.join(list(missing_keys))))
 
     return config
+
