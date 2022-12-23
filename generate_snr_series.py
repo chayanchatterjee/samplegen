@@ -155,8 +155,8 @@ def main():
     print('Done!\n')
 
     # Check output file directory exists
-    output_dir = os.path.join('.', 'output')
-#    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/Distance_Variable/'
+#    output_dir = os.path.join('.', 'output')
+    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/SNR_Variable/' # change for SNR variable
     if not os.path.exists(output_dir):
         print("Output folder cannot be found. Please create a folder",
               "named 'output' to store data in.")
