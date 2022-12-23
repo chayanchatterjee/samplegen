@@ -14,7 +14,7 @@ import h5py
 
 import multiprocessing
 #import Queue
-from Queue import Empty
+from queue import Empty
 
 from pycbc.filter import sigma, matched_filter
 from pycbc.types.timeseries import TimeSeries
