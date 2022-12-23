@@ -618,3 +618,4 @@ class NoiseTimeline:
 
         return self.hdf_files[-1]['start_time'] + \
             self.hdf_files[-1]['duration']
+
