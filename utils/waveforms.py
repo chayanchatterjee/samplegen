@@ -195,15 +195,13 @@ def get_waveform(static_arguments,
                                  coa_phase=waveform_params['coa_phase'],
                                  delta_f=static_arguments['delta_f'],
                                  delta_t=static_arguments['delta_t'],
-                                 distance=waveform_params['distance'],
+                                 distance=waveform_params['distance'],  # Change for SNR Variable
                                  f_lower=static_arguments['f_lower'],
                                  inclination=waveform_params['inclination'],
                                  mass1=waveform_params['mass1'],
                                  mass2=waveform_params['mass2'],
                                  spin1z=waveform_params['spin1z'],
-                                 spin2z=waveform_params['spin2z'],
-                                 ra=waveform_params['ra'],
-                                 dec=waveform_params['dec'])
+                                 spin2z=waveform_params['spin2z'])
 
     # Perform the actual simulation with the given parameters
     h_plus, h_cross = simulate_waveform(**simulation_parameters)
@@ -260,13 +258,12 @@ def get_detector_signals(static_arguments,
     h_plus, h_cross = waveform
 
     # Extract the parameters we will need later for the projection
-    right_ascension = 2.0*np.pi*waveform_params['ra']
+    right_ascension = 2*np.pi*waveform_params['ra']
     declination = np.arcsin(1-2*waveform_params['dec'])
+
 #    right_ascension = waveform_params['ra']
 #    declination = waveform_params['dec']
     polarization = waveform_params['polarization']
-#    print(right_ascension)
-#    print(declination)
 
     # Store the detector signals we will get through projection
     detector_signals = {}
@@ -285,17 +282,14 @@ def get_detector_signals(static_arguments,
             detector.antenna_pattern(right_ascension=right_ascension,
                                      declination=declination,
                                      polarization=polarization,
-                                     t_gps=1187008882.4) # 1187008882.4
+                                     t_gps=1187008882.4)
 
         # Calculate the time offset from H1 for this detector
         delta_t_h1 = \
             detector.time_delay_from_detector(other_detector=detectors['H1'],
                                               right_ascension=right_ascension,
                                               declination=declination,
-                                              t_gps=1187008882.4)  # 1187008882.4
-
-#        print("delta_t_h1={}".format(delta_t_h1))
-
+                                              t_gps=1187008882.4)
         # Project the waveform onto the antenna pattern
         detector_signal = f_plus * h_plus + f_cross * h_cross
 
