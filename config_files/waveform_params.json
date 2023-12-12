@@ -6,30 +6,38 @@
 ; Waveform parameters that will vary in MCMC
 mass1 =
 mass2 =
-spin1z =
-spin2z =
+#spin1z =
+#spin2z =
+spin1_a =
+spin1_azimuthal =
+spin1_polar =
+spin2_a =
+spin2_azimuthal =
+spin2_polar =
+t_shift =
 ra =
 dec =
-distance = 
+#distance = 
 coa_phase =
 inclination =
 polarization =
-#injection_snr =
+injection_snr =
 
 
 [static_args]
 ; Waveform parameters that will not change in MCMC
-approximant = SpinTaylorT4
+; IMRPhenomHM for higher-order modes (non-precessing), IMRPhenomPv2 for precessing (no higher order modes).
+approximant = IMRPhenomXPHM
 domain = time
 f_lower = 20
-#distance = 100
-waveform_length = 500
+distance = 100
+waveform_length = 128
 
 ; Width of the background noise interval (in seconds) around the event_time,
 ; which is used to make the injection. Should be larger than (see below):
 ;   sample_length = seconds_before_event + seconds_after_event
 ; because we need to crop off the edges that are corrupted by the whitening.
-noise_interval_width = 1000
+noise_interval_width = 16
 
 ; original_sampling_rate = Sampling rate of raw HDF files (usually 4096 Hz)
 ; target_sampling_rate = Desired sampling rate for sample generation output
@@ -50,8 +58,8 @@ bandpass_upper = 2048
 ; Define how to align the sample around the event time. By convention, the
 ; event time is the H1 time!
 ; The sum of these values will be the the sample_length!
-seconds_before_event = 100
-seconds_after_event = 400
+seconds_before_event = 0.8
+seconds_after_event = 0.2
 
 ; alpha for the Tukey window that is used to "fade on" the waveforms
 ; It represents the fraction of the window inside the cosine tapered region.
@@ -77,45 +85,70 @@ tukey_alpha = 0.25
 ; Prior for mass1
 name = uniform
 #filename = params_49.hdf
-min-mass1 = 1.1
-max-mass1 = 2.0
+min-mass1 = 5.0
+max-mass1 = 100.0
 
 
 [prior-mass2]
 ; Prior for mass2
 name = uniform
 #filename = params_49.hdf
-min-mass2 = 1.1
-max-mass2 = 2.0
+min-mass2 = 5.0
+max-mass2 = 100.0
 
 
-[prior-spin1z]
-; Prior for spin1z
-name = uniform
-min-spin1z = 0
-max-spin1z = 0.0001
-
-
-[prior-spin2z]
-; Prior for spin2z
-name = uniform
-min-spin2z = 0
-max-spin2z = 0.0001
-
-[prior-distance]
-; Prior for distance
-name = uniform
-#filename = params_38.hdf
-min-distance = 4
-max-distance = 1000
-
-
-#[prior-injection_snr]
-#; Prior for the injection SNR
+#[prior-spin1z]
+#; Prior for spin1z
 #name = uniform
+#min-spin1z = -0.998
+#max-spin1z = 0.998
+
+
+#[prior-spin2z]
+#; Prior for spin2z
+#name = uniform
+#min-spin2z = -0.998
+#max-spin2z = 0.998
+
+[prior-spin1_a]
+name = uniform
+min-spin1_a = 0.0
+max-spin1_a = 0.99
+
+[prior-spin1_polar+spin1_azimuthal]
+name = uniform_solidangle
+polar-angle = spin1_polar
+azimuthal-angle = spin1_azimuthal
+
+[prior-spin2_a]
+name = uniform
+min-spin2_a = 0.0
+max-spin2_a = 0.99
+
+[prior-spin2_polar+spin2_azimuthal]
+name = uniform_solidangle
+polar-angle = spin2_polar
+azimuthal-angle = spin2_azimuthal
+
+[prior-t_shift]
+name = uniform
+min-t_shift = -0.1
+max-t_shift = 0.1
+
+#[prior-distance]
+#; Prior for distance
+#name = uniform
+##filename = params_38.hdf
+#min-distance = 4
+#max-distance = 1000
+
+
+[prior-injection_snr]
+; Prior for the injection SNR
+name = uniform
 #filename = snr_49.hdf
-#min-injection_snr = 9
-#max-injection_snr = 500
+min-injection_snr = 30
+max-injection_snr = 40
 
 
 [prior-coa_phase]
@@ -147,4 +180,11 @@ max-dec = 1
 ; Polarization prior
 name = uniform_angle
 
+[constraint-1]
+name = custom
+constraint_arg = mass2 <= mass1
+
+[constraint-2]
+name = custom
+constraint_arg = mchirp_from_mass1_mass2(mass1, mass2) <= 10
 
