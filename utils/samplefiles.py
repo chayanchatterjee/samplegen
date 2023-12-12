@@ -176,6 +176,15 @@ class SampleFile:
                         np.array(hdf_file['injection_parameters'][key])
                 except TypeError:
                     self.data['injection_parameters'][key] = np.array(None)
+                    
+            # Read in noise parameters
+            self.data['noise_parameters'] = dict()
+            for key in hdf_file['/noise_parameters'].keys():
+                try:
+                    self.data['noise_parameters'][key] = \
+                        np.array(hdf_file['noise_parameters'][key])
+                except TypeError:
+                    self.data['noise_parameters'][key] = np.array(None)
 
             # Read in dict with normalization parameters
             self.data['normalization_parameters'] = \
@@ -236,6 +245,20 @@ class SampleFile:
             # dict as a new dataset
             group = hdf_file.create_group('injection_parameters')
             for key, value in iteritems(self.data['injection_parameters']):
+                if value is not None:
+                    group.create_dataset(name=key,
+                                         shape=value.shape,
+                                         dtype='float64',
+                                         data=value)
+                else:
+                    group.create_dataset(name=key,
+                                         shape=None,
+                                         dtype='float64')
+                    
+            # Create group for noise_parameters and save every item of the
+            # dict as a new dataset
+            group = hdf_file.create_group('noise_parameters')
+            for key, value in iteritems(self.data['noise_parameters']):
                 if value is not None:
                     group.create_dataset(name=key,
                                          shape=value.shape,
@@ -328,6 +351,29 @@ class SampleFile:
 
         else:
             df = df_injection_samples
+            
+        # If requested, create a data frame for the noise parameters and
+        # merge it with the data frame containing the noise samples
+        if noise_parameters:
+            noise_params = []
+
+            # Check if we even have any noise parameters
+            if self.data['noise_parameters']['h1_signal'].shape != ():
+                for i in range(len(df_noise_samples)):
+                    _ = {k: v[i] for k, v in
+                         iteritems(self.data['noise_parameters'])}
+                    noise_params.append(_)
+                df_noise_params = pd.DataFrame().append(noise_params,
+                                                            ignore_index=True,
+                                                            sort=True)
+            else:
+                df_injection_params = pd.DataFrame()
+
+            df = pd.concat([df_noise_samples, df_noise_params],
+                           axis=1, sort=True)
+
+        else:
+            df = df_injection_samples
 
         # If requested, add the static_arguments to the data frame
         # containing the injections, and a smaller subset of the
@@ -366,5 +412,3 @@ class SampleFile:
         # Or just return a single data frame containing both types of samples
         else:
             return df
-
-        
