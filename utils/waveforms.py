@@ -19,6 +19,7 @@ from pycbc.workflow import WorkflowConfigParser
 from pycbc.waveform import get_td_waveform, get_fd_waveform
 from pycbc.detector import Detector
 from pycbc.types.timeseries import TimeSeries
+import math
 
 
 # -----------------------------------------------------------------------------
@@ -191,11 +192,48 @@ def get_waveform(static_arguments,
 
     # Collect all the required parameters for the simulation from the given
     # static and variable parameters
-    simulation_parameters = dict(approximant=static_arguments['approximant'],
+    
+    if 'spin1_a' in waveform_params:
+        
+        spin1_a = waveform_params['spin1_a']
+        spin2_a = waveform_params['spin2_a']
+        spin1_polar = waveform_params['spin1_polar']
+        spin2_polar = waveform_params['spin2_polar']
+        spin1_azimuthal = waveform_params['spin1_azimuthal']
+        spin2_azimuthal = waveform_params['spin2_azimuthal']
+
+        spin1x = spin1_a * math.sin(spin1_polar) * math.cos(spin1_azimuthal)
+        spin2x = spin2_a * math.sin(spin2_polar) * math.cos(spin2_azimuthal)
+        spin1y = spin1_a * math.sin(spin1_polar) * math.sin(spin1_azimuthal)
+        spin2y = spin2_a * math.sin(spin2_polar) * math.sin(spin2_azimuthal)
+        spin1z = spin1_a * math.cos(spin1_polar)
+        spin2z = spin2_a * math.cos(spin2_polar)
+
+        simulation_parameters = dict(approximant=static_arguments['approximant'],
+                                   coa_phase=waveform_params['coa_phase'],
+                                   delta_f=static_arguments['delta_f'],
+                                   delta_t=static_arguments['delta_t'],
+#                                   distance=waveform_params['distance'], # Change for SNR Variable
+                                   f_lower=static_arguments['f_lower'],
+#                                   f_ref=static_arguments['f_ref'],
+                                   inclination=waveform_params['inclination'],
+                                   mass1=waveform_params['mass1'],
+                                   mass2=waveform_params['mass2'],
+                                   spin1x=spin1x,
+                                   spin2x=spin2x,
+                                   spin1y=spin1y,
+                                   spin2y=spin2y,
+                                   spin1z=spin1z,
+                                   spin2z=spin2z)
+    
+    
+    
+    else:
+        simulation_parameters = dict(approximant=static_arguments['approximant'],
                                  coa_phase=waveform_params['coa_phase'],
                                  delta_f=static_arguments['delta_f'],
                                  delta_t=static_arguments['delta_t'],
-                                 distance=waveform_params['distance'],  # Change for SNR Variable
+#                                 distance=waveform_params['distance'],  # Change for SNR Variable
                                  f_lower=static_arguments['f_lower'],
                                  inclination=waveform_params['inclination'],
                                  mass1=waveform_params['mass1'],
