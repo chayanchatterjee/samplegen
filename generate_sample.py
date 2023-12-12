@@ -374,10 +374,18 @@ if __name__ == '__main__':
     v1_samples = [_['v1_strain'] for _ in all_samples]
 
     # Stack recordings along first axis
+
+#    a = static_arguments['seconds_before_event']
+#    b = static_arguments['seconds_after_event']
+#    end_idx = (a+b)*static_arguments['target_sampling_rate']
+
+#    h1_samples = [row[0:2048] for row in h1_samples]
+#    l1_samples = [row[0:2048] for row in l1_samples]
+#    v1_samples = [row[0:2048] for row in v1_samples]
+
     h1_samples = np.vstack(h1_samples)
     l1_samples = np.vstack(l1_samples)
     v1_samples = np.vstack(v1_samples)
-
 
     # Compute the mean and standard deviation for both detectors as the median
     # of the means / standard deviations for each sample. This is more robust
@@ -404,6 +412,7 @@ if __name__ == '__main__':
                             injection_parameters=dict(),
                             injection_samples=dict(),
                             noise_samples=dict(),
+                            noise_parameters=dict(),
                             normalization_parameters=normalization_parameters,
                             static_arguments=static_arguments)
 
@@ -412,40 +421,50 @@ if __name__ == '__main__':
         for key in ('event_time', 'h1_strain', 'l1_strain', 'v1_strain'):
             if samples[sample_type]:
                 value = np.array([_[key] for _ in list(samples[sample_type])])
+                        
             else:
                 value = None
             sample_file_dict[sample_type][key] = value
 
     # Collect and add injection_parameters (ignore noise samples here, because
     # for those, the injection_parameters are always None)
-    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'v1_signal', 'v1_snr', 'scale_factor']
+    other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'v1_signal', 'v1_signal_whitened', 'v1_snr', 'scale_factor']
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
-#            value = np.array([_[key] for _ in
-#                              injection_parameters['injection_samples']])
-            
-            for i in range(n_samples):
-                if neglat_seconds > 0:
-                    truncate_length = static_arguments["target_sampling_rate"]*neglat_seconds
-                    temp_h1 = np.copy(sample_file_dict['injection_samples']['h1_signal'][i])
-                    temp_l1 = np.copy(sample_file_dict['injection_samples']['l1_signal'][i])
-                    temp_v1 = np.copy(sample_file_dict['injection_samples']['v1_signal'][i])
-                    temp_h1[-truncate_length:] = np.zeros(truncate_length)
-                    temp_l1[-truncate_length:] = np.zeros(truncate_length)
-                    temp_v1[-truncate_length:] = np.zeros(truncate_length)
-                    sample_file_dict['injection_samples']['h1_signal'][i] = temp_h1
-                    sample_file_dict['injection_samples']['l1_signal'][i] = temp_l1
-                    sample_file_dict['injection_samples']['v1_signal'][i] = temp_v1
+            value = np.array([_[key] for _ in
+                              injection_parameters['injection_samples']])
+        
+#            for i in range(n_samples):
+#                if neglat_seconds > 0:
+#                    truncate_length = static_arguments["target_sampling_rate"]*neglat_seconds
+#                    temp_h1 = np.copy(sample_file_dict['injection_samples']['h1_signal'][i])
+#                    temp_l1 = np.copy(sample_file_dict['injection_samples']['l1_signal'][i])
+#                    temp_v1 = np.copy(sample_file_dict['injection_samples']['v1_signal'][i])
+#                    temp_h1[-truncate_length:] = np.zeros(truncate_length)
+#                    temp_l1[-truncate_length:] = np.zeros(truncate_length)
+#                    temp_v1[-truncate_length:] = np.zeros(truncate_length)
+#                    sample_file_dict['injection_samples']['h1_signal'][i] = temp_h1
+#                    sample_file_dict['injection_samples']['l1_signal'][i] = temp_l1
+#                    sample_file_dict['injection_samples']['v1_signal'][i] = temp_v1
                     
-            value = np.array([_[key] for _ in injection_parameters['injection_samples']])
+#            value = np.array([_[key] for _ in injection_parameters['injection_samples']])
                         
         else:
             value = None
         sample_file_dict['injection_parameters'][key] = value
+        
+    noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened', 'v1_signal', 'v1_signal_whitened']    
+    for key in list(noise_keys):
+        if injection_parameters['noise_samples']:
+            value = np.array([_[key] for _ in injection_parameters['noise_samples']])
+        else:
+            value = None
+        sample_file_dict['noise_parameters'][key] = value
+                
 
     # Construct the path for the output HDF file
-#    output_dir = os.path.join('.', 'output')
-    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/SNR_Variable/' # change for SNR variable
+    output_dir = os.path.join('.', 'output')
+#    output_dir = '/group/pmc005/cchatterjee/SNR_time_series_sample_files/SNR_Variable/' # change for SNR variable
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     sample_file_path = os.path.join(output_dir, config['output_file_name'])
