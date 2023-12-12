@@ -17,6 +17,7 @@ from pycbc.psd import interpolate
 from pycbc.psd.analytical import aLIGOZeroDetHighPower
 from pycbc.noise import noise_from_psd
 from pycbc.filter import sigma
+from pycbc.types import TimeSeries
 
 from .hdffiles import get_strain_from_hdf_file
 from .waveforms import get_detector_signals, get_waveform
@@ -94,13 +95,13 @@ def generate_sample(static_arguments,
                                     delta_f=delta_f,
                                     low_freq_cutoff=f_lower)
 
-        filename_LIGO = '/home/cchatterjee/samplegen/utils/LIGO_O4_PSD.txt'
-        psd_LIGO = pycbc.psd.from_txt(filename_LIGO, fd_length, delta_f,
-                         f_lower, is_asd_file=False)
+#        filename_LIGO = '/home/cchatterjee/samplegen/utils/LIGO_O4_PSD.txt'
+#        psd_LIGO = pycbc.psd.from_txt(filename_LIGO, fd_length, delta_f,
+#                         f_lower, is_asd_file=False)
 
-        filename_Virgo = '/home/cchatterjee/samplegen/utils/Virgo_O4_PSD.txt'
-        psd_Virgo = pycbc.psd.from_txt(filename_Virgo, fd_length, delta_f,
-                         f_lower, is_asd_file=False)
+#        filename_Virgo = '/home/cchatterjee/samplegen/utils/Virgo_O4_PSD.txt'
+#        psd_Virgo = pycbc.psd.from_txt(filename_Virgo, fd_length, delta_f,
+#                         f_lower, is_asd_file=False)
 
         # Actually generate the noise using the PSD and LALSimulation
         noise = dict()
@@ -147,9 +148,32 @@ def generate_sample(static_arguments,
     # In this case, there are no detector signals and no injection
     # parameters, and the strain is simply equal to the noise
     if waveform_params is None:
-        detector_signals = None
-        injection_parameters = None
+        detector_signals = {}
+        zero_signals = {}
+        injection_parameters = {}
         strain = noise
+        psds_noise = {}
+        length = (seconds_before_event + seconds_after_event)*target_sampling_rate
+        
+        for det in ('H1', 'L1', 'V1'):
+            # Estimate the Power Spectral Density from the dummy strain
+            psds_noise[det] = noise[det].psd(4)
+            psds_noise[det] = interpolate(psds_noise[det], delta_f=delta_f)
+                        
+            # Save whitened noise and a vector of zeros as the pure signals.
+            f_lower = 20
+            idx = int(psds_noise[det].duration * f_lower)
+            psds_noise[det][:idx] = psds_noise[det][idx]
+            psds_noise[det][-1:] = psds_noise[det][-2]
+            detector_signals[det] = np.zeros(int(length))
+            detector_signals[det] = TimeSeries(detector_signals[det], delta_t = 1.0/target_sampling_rate)
+            
+        injection_parameters = {'h1_signal': detector_signals['H1'],
+                                'l1_signal': detector_signals['L1'],
+                                'v1_signal': detector_signals['V1'],
+                                'h1_signal_whitened': detector_signals['H1'],
+                                'l1_signal_whitened': detector_signals['L1'],
+                                'v1_signal_whitened': detector_signals['V1'],}
 
     # Otherwise, we need to simulate a waveform for the given waveform_params
     # and add it into the noise to create the strain
@@ -176,23 +200,35 @@ def generate_sample(static_arguments,
 
         # Store the dummy strain, the PSDs and the SNRs for the two detectors
         strain_ = {}
-        psds = {}
+        psds_noise = {}
         snrs = {}
+        whitened_waveforms = {}
 
         # Calculate these quantities for both detectors
         for det in ('H1', 'L1', 'V1'):
 
+            # Estimate the Power Spectral Density from the dummy strain
+            psds_noise[det] = noise[det].psd(4)
+            psds_noise[det] = interpolate(psds_noise[det], delta_f=delta_f)
+                        
             # Add the simulated waveform into the noise to get the dummy strain
             strain_[det] = noise[det].add_into(detector_signals[det])
+            
+            # Save whitened waveforms
+            f_lower = 20
+            idx = int(psds_noise[det].duration * f_lower)
+            psds_noise[det][:idx] = psds_noise[det][idx]
+            psds_noise[det][-1:] = psds_noise[det][-2]
+            whitened_waveforms[det] = (detector_signals[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()
 
             # Estimate the Power Spectral Density from the dummy strain
-            psds[det] = strain_[det].psd(4)
-            psds[det] = interpolate(psds[det], delta_f=delta_f)
+#            psds[det] = strain_[det].psd(4)
+#            psds[det] = interpolate(psds[det], delta_f=delta_f)
 
             # Use the PSD estimate to calculate the optimal matched
             # filtering SNR for this injection and this detector
             snrs[det] = sigma(htilde=detector_signals[det],
-                              psd=psds[det],
+                              psd=psds_noise[det],
                               low_frequency_cutoff=f_lower)
 
         # Calculate the network optimal matched filtering SNR for this
@@ -213,10 +249,10 @@ def generate_sample(static_arguments,
             # Add the simulated waveform into the noise, using a scaling
             # factor to ensure that the resulting NOMF-SNR equals the chosen
             # injection SNR
-#            strain[det] = noise[det].add_into(scale_factor *
-#                                              detector_signals[det])          # Change for SNR Variable
+            strain[det] = noise[det].add_into(scale_factor *
+                                              detector_signals[det])          # Change for SNR Variable
             
-            strain[det] = noise[det].add_into(detector_signals[det])
+#            strain[det] = noise[det].add_into(detector_signals[det])
 
         # ---------------------------------------------------------------------
         # Store some information about the injection we just made
@@ -245,10 +281,19 @@ def generate_sample(static_arguments,
         # Whiten the strain (using the built-in whitening of PyCBC)
         # We don't need to remove the corrupted samples here, because we
         # crop the strain later on
-        strain[det] = \
-            strain[det].whiten(segment_duration=segment_duration,
-                               max_filter_duration=max_filter_duration,
-                               remove_corrupted=False)
+#        strain[det] = \
+#            strain[det].whiten(segment_duration=segment_duration,
+#                               max_filter_duration=max_filter_duration,
+#                               remove_corrupted=False)
+
+        # Calculate the noise spectrum        
+        
+        f_lower = 20
+        psds_noise[det] = interpolate(psds_noise[det], strain[det].delta_f)
+        idx = int(psds_noise[det].duration * f_lower)
+        psds_noise[det][:idx] = psds_noise[det][idx]
+        psds_noise[det][-1:] = psds_noise[det][-2]
+        strain[det] = (strain[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()
 
         # Get the limits for the bandpass
         bandpass_lower = static_arguments['bandpass_lower']
@@ -272,20 +317,35 @@ def generate_sample(static_arguments,
     # Cut strain (and signal) time series to the pre-specified length
     # -------------------------------------------------------------------------
 
+    
     for det in ('H1', 'L1', 'V1'):
+        
+        if waveform_params is not None:
+            t_shift = waveform_params['t_shift']
 
-        # Define some shortcuts for slicing
-        a = event_time - seconds_before_event
-        b = event_time + seconds_after_event
-
+            # Define some shortcuts for slicing
+            a = event_time - seconds_before_event + t_shift
+            b = event_time + seconds_after_event + t_shift
+            
+        else:
+            
+            # Define some shortcuts for slicing
+            a = event_time - seconds_before_event
+            b = event_time + seconds_after_event
+            
         # Cut the strain to the desired length
         strain[det] = strain[det].time_slice(a, b)
+
+        total_length = seconds_before_event + seconds_after_event
+        end_index = int(total_length*target_sampling_rate)
+        strain[det] = strain[det][0:end_index]
 
         # If we've made an injection, also cut the simulated signal
         if waveform_params is not None:
 
             # Cut the detector signals to the specified length
             detector_signals[det] = detector_signals[det].time_slice(a, b)
+            whitened_waveforms[det] = whitened_waveforms[det].time_slice(a, b)
 
             # Also add the detector signals to the injection parameters
             injection_parameters['h1_signal'] = \
@@ -294,7 +354,28 @@ def generate_sample(static_arguments,
                 np.array(detector_signals['L1'])
             injection_parameters['v1_signal'] = \
                 np.array(detector_signals['V1'])
+            injection_parameters['h1_signal_whitened'] = \
+                np.array(whitened_waveforms['H1'])
+            injection_parameters['l1_signal_whitened'] = \
+                np.array(whitened_waveforms['L1'])
+            injection_parameters['v1_signal_whitened'] = \
+                np.array(whitened_waveforms['V1'])
+            
+        elif waveform_params is None:
 
+            injection_parameters['h1_signal'] = \
+                np.array(detector_signals['H1'])
+            injection_parameters['l1_signal'] = \
+                np.array(detector_signals['L1'])
+            injection_parameters['v1_signal'] = \
+                np.array(detector_signals['V1'])
+            injection_parameters['h1_signal_whitened'] = \
+                np.array(detector_signals['H1'])
+            injection_parameters['l1_signal_whitened'] = \
+                np.array(detector_signals['L1'])
+            injection_parameters['v1_signal_whitened'] = \
+                np.array(detector_signals['V1'])
+            
     # -------------------------------------------------------------------------
     # Collect all available information about this sample and return results
     # -------------------------------------------------------------------------
