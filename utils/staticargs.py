@@ -88,7 +88,7 @@ def typecast_static_args(static_args):
         int(args['whitening_max_filter_duration'])
 
     # Cast variables to float that need to be floats
-#    args['distance'] = float(args['distance'])              # Change for SNR Variable
+    args['distance'] = float(args['distance'])
     args['f_lower'] = float(args['f_lower'])
     args['seconds_before_event'] = float(args['seconds_before_event'])
     args['seconds_after_event'] = float(args['seconds_after_event'])
