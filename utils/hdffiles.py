@@ -121,7 +121,7 @@ def get_strain_from_hdf_file(hdf_file_paths,
     sample = dict()
 
     # Loop over both detectors
-    for detector in ('H1', 'L1', 'V1'):
+    for detector in ('H1', 'L1'):
 
         # Extract the path to the HDF file
         file_path = hdf_file_paths[detector]
@@ -158,7 +158,7 @@ def get_strain_from_hdf_file(hdf_file_paths,
         timeseries = dict()
 
         # Convert strain of both detectors to a TimeSeries object
-        for detector in ('H1', 'L1', 'V1'):
+        for detector in ('H1', 'L1'):
 
             timeseries[detector] = \
                 TimeSeries(initial_array=sample[detector],
@@ -266,7 +266,7 @@ class NoiseTimeline:
                                    dtype=np.int32)
 
                 # Perform some basic sanity checks
-                assert detector in ['H1', 'L1', 'V1'], \
+                assert detector in ['H1', 'L1'], \
                     'Invalid detector {}!'.format(detector)
                 assert duration == len(inj_mask) == len(dq_mask), \
                     'Length of InjMask or DQMask does not match the duration!'
@@ -295,10 +295,10 @@ class NoiseTimeline:
         # Initialize the empty timeline
         timeline = dict(h1_inj_mask=np.zeros(n_entries, dtype=np.int32),
                         l1_inj_mask=np.zeros(n_entries, dtype=np.int32),
-			v1_inj_mask=np.zeros(n_entries, dtype=np.int32),
+#			v1_inj_mask=np.zeros(n_entries, dtype=np.int32),
                         h1_dq_mask=np.zeros(n_entries, dtype=np.int32),
-                        l1_dq_mask=np.zeros(n_entries, dtype=np.int32),
-			v1_dq_mask=np.zeros(n_entries, dtype=np.int32))
+                        l1_dq_mask=np.zeros(n_entries, dtype=np.int32))
+#			v1_dq_mask=np.zeros(n_entries, dtype=np.int32))
         # Add information from HDF files to timeline
         for hdf_file in self.hdf_files:
 
@@ -318,9 +318,9 @@ class NoiseTimeline:
             elif detector == 'L1':
                 timeline['l1_inj_mask'][idx_start:idx_end] = inj_mask
                 timeline['l1_dq_mask'][idx_start:idx_end] = dq_mask
-            else:
-                timeline['v1_inj_mask'][idx_start:idx_end] = inj_mask
-                timeline['v1_dq_mask'][idx_start:idx_end] = dq_mask
+     #       else:
+     #           timeline['v1_inj_mask'][idx_start:idx_end] = inj_mask
+     #           timeline['v1_dq_mask'][idx_start:idx_end] = dq_mask
 
 
         # Return the completed timeline
@@ -425,10 +425,10 @@ class NoiseTimeline:
         environment = \
             dict(h1_inj_mask=self.timeline['h1_inj_mask'][idx_start:idx_end],
                  l1_inj_mask=self.timeline['l1_inj_mask'][idx_start:idx_end],
-                 v1_inj_mask=self.timeline['v1_inj_mask'][idx_start:idx_end],
+     #            v1_inj_mask=self.timeline['v1_inj_mask'][idx_start:idx_end],
                  h1_dq_mask=self.timeline['h1_dq_mask'][idx_start:idx_end],
-                 l1_dq_mask=self.timeline['l1_dq_mask'][idx_start:idx_end],
-                 v1_dq_mask=self.timeline['v1_dq_mask'][idx_start:idx_end])
+                 l1_dq_mask=self.timeline['l1_dq_mask'][idx_start:idx_end])
+     #            v1_dq_mask=self.timeline['v1_dq_mask'][idx_start:idx_end])
 
         # ---------------------------------------------------------------------
         # Data Quality Check
@@ -448,9 +448,9 @@ class NoiseTimeline:
             return False
 
         # Perform the DQ check for V1
-        environment['v1_dq_mask'] = environment['v1_dq_mask'] > min_dq
-        if not np.all(environment['v1_dq_mask']):
-            return False
+     #   environment['v1_dq_mask'] = environment['v1_dq_mask'] > min_dq
+     #   if not np.all(environment['v1_dq_mask']):
+     #       return False
 
 
         # ---------------------------------------------------------------------
@@ -477,9 +477,9 @@ class NoiseTimeline:
                 return False
 
            # Perform the injection check for V1
-            if not np.all(np.bitwise_and(environment['v1_inj_mask'],
-                                         np.left_shift(ones, i))):
-                return False
+#            if not np.all(np.bitwise_and(environment['v1_inj_mask'],
+#                                         np.left_shift(ones, i))):
+#                return False
 
         # If we have not returned False yet, the time must be valid!
         return True
@@ -558,7 +558,7 @@ class NoiseTimeline:
                 result[hdf_file['detector']] = hdf_file['file_path']
 
             # If both files were found, we are done!
-            if 'H1' in result.keys() and 'L1' in result.keys() and 'V1' in result.keys():
+            if 'H1' in result.keys() and 'L1' in result.keys():
                 return result
 
         # If we didn't both files, return None
