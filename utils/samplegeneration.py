@@ -21,6 +21,8 @@ from pycbc.types import TimeSeries
 
 from .hdffiles import get_strain_from_hdf_file
 from .waveforms import get_detector_signals, get_waveform
+from pycbc.psd import inverse_spectrum_truncation, interpolate
+from scipy.fft import fft, ifft
 
 
 # -----------------------------------------------------------------------------
@@ -105,7 +107,7 @@ def generate_sample(static_arguments,
 
         # Actually generate the noise using the PSD and LALSimulation
         noise = dict()
-        for i, det in enumerate(('H1', 'L1', 'V1')):
+        for i, det in enumerate(('H1', 'L1')):
 
             # Compute the length of the noise sample in time steps
             noise_length = noise_interval_width * target_sampling_rate
@@ -116,12 +118,12 @@ def generate_sample(static_arguments,
                                             delta_t=(1.0 / target_sampling_rate),
                                             psd=psd,
                                             seed=(2 * event_time + i))
-            elif(det == 'V1'):
-            # Generate the noise for this detector
-                noise[det] = noise_from_psd(length=noise_length,
-                                            delta_t=(1.0 / target_sampling_rate),
-                                            psd=psd,
-                                            seed=(2 * event_time + i))
+         #   elif(det == 'V1'):
+         #   # Generate the noise for this detector
+         #       noise[det] = noise_from_psd(length=noise_length,
+         #                                   delta_t=(1.0 / target_sampling_rate),
+         #                                   psd=psd,
+         #                                   seed=(2 * event_time + i))
 
             # Manually fix the noise start time to match the fake event time.
             # However, for some reason, the correct setter method seems broken?
@@ -155,25 +157,28 @@ def generate_sample(static_arguments,
         psds_noise = {}
         length = (seconds_before_event + seconds_after_event)*target_sampling_rate
         
-        for det in ('H1', 'L1', 'V1'):
+        for det in ('H1', 'L1'):
             # Estimate the Power Spectral Density from the dummy strain
-            psds_noise[det] = noise[det].psd(4)
-            psds_noise[det] = interpolate(psds_noise[det], delta_f=delta_f)
+ #           psds_noise[det] = noise[det].psd(4)
+ #           psds_noise[det] = interpolate(psds_noise[det], delta_f=delta_f)
                         
             # Save whitened noise and a vector of zeros as the pure signals.
-            f_lower = 20
-            idx = int(psds_noise[det].duration * f_lower)
-            psds_noise[det][:idx] = psds_noise[det][idx]
-            psds_noise[det][-1:] = psds_noise[det][-2]
+ #           f_lower = 20
+ #           idx = int(psds_noise[det].duration * f_lower)
+ #           psds_noise[det][:idx] = psds_noise[det][idx]
+ #           psds_noise[det][-1:] = psds_noise[det][-2]
             detector_signals[det] = np.zeros(int(length))
             detector_signals[det] = TimeSeries(detector_signals[det], delta_t = 1.0/target_sampling_rate)
             
         injection_parameters = {'h1_signal': detector_signals['H1'],
                                 'l1_signal': detector_signals['L1'],
-                                'v1_signal': detector_signals['V1'],
+     #                           'v1_signal': detector_signals['V1'],
                                 'h1_signal_whitened': detector_signals['H1'],
-                                'l1_signal_whitened': detector_signals['L1'],
-                                'v1_signal_whitened': detector_signals['V1'],}
+                                'l1_signal_whitened': detector_signals['L1']}
+     #                           'v1_signal_whitened': detector_signals['V1']}
+     #                           'psd_noise_h1':psds_noise['H1'],
+     #                           'psd_noise_l1':psds_noise['L1'],
+     #                           'psd_noise_v1':psds_noise['V1'],}
 
     # Otherwise, we need to simulate a waveform for the given waveform_params
     # and add it into the noise to create the strain
@@ -201,11 +206,12 @@ def generate_sample(static_arguments,
         # Store the dummy strain, the PSDs and the SNRs for the two detectors
         strain_ = {}
         psds_noise = {}
+        psds = {}
         snrs = {}
         whitened_waveforms = {}
 
         # Calculate these quantities for both detectors
-        for det in ('H1', 'L1', 'V1'):
+        for det in ('H1', 'L1'):
 
             # Estimate the Power Spectral Density from the dummy strain
             psds_noise[det] = noise[det].psd(4)
@@ -219,7 +225,28 @@ def generate_sample(static_arguments,
             idx = int(psds_noise[det].duration * f_lower)
             psds_noise[det][:idx] = psds_noise[det][idx]
             psds_noise[det][-1:] = psds_noise[det][-2]
+#            dt = 1./target_sampling_rate
+#            norm = 1./np.sqrt(1./(dt*2))
+
+#            psds_noise[det] = inverse_spectrum_truncation(psds_noise[det],
+#                   max_filter_len=4,
+#                   low_frequency_cutoff=20.0,
+#                   trunc_method='hann')
+
+            # If the whitened waveforms are not normalized, the amplitudes turn out to be between around -15000 to +15000.
+            # This is because the waveforms are generated with fixed distance = 100 Mpc.
             whitened_waveforms[det] = (detector_signals[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()
+            
+            # Normalize the whitened waveforms between -1 and 1 if necessary.
+            whitened_waveforms[det] /= np.amax(np.absolute(whitened_waveforms[det].numpy()))
+ 
+                        
+#            delta_t = 1.0/2048
+#            max_filter_len = int(round(static_arguments['whitening_max_filter_duration'] * delta_f))
+#            whitened_waveforms[det] = whitened_waveforms[det][int(max_filter_len/2):int(len(whitened_waveforms[det])-max_filter_len/2)]
+            
+
+#            whitened_waveforms[det] = whitened_waveforms[det].to_timeseries()
 
             # Estimate the Power Spectral Density from the dummy strain
 #            psds[det] = strain_[det].psd(4)
@@ -231,9 +258,20 @@ def generate_sample(static_arguments,
                               psd=psds_noise[det],
                               low_frequency_cutoff=f_lower)
 
+#            h_fft = fft(whitened_waveforms[det].numpy())
+#            snr_freq = (h_fft * h_fft.conjugate())
+#            snr_time = np.abs(ifft(snr_freq))
+#            snrs[det] = np.sqrt(np.max(snr_time)) 
+
+#            h_fft = fft(whitened_waveforms[det].numpy())
+#            snr_freq = np.inner(h_fft,h_fft.conjugate())
+#            snrs[det] = np.sqrt(np.abs(snr_freq)) 
+
+
         # Calculate the network optimal matched filtering SNR for this
         # injection (which we need for scaling to the chosen injection SNR)
-        nomf_snr = np.sqrt(snrs['H1']**2 + snrs['L1']**2 + snrs['V1']**2)
+        nomf_snr = np.sqrt(snrs['H1']**2 + snrs['L1']**2) 
+#        nomf_snr = np.sqrt(snrs['L1']**2)     
 
         # ---------------------------------------------------------------------
         # Add the waveform into the noise with the chosen injection SNR
@@ -241,16 +279,30 @@ def generate_sample(static_arguments,
 
         # Compute the rescaling factor
         injection_snr = waveform_params['injection_snr']
-        scale_factor = 1.0 * injection_snr / nomf_snr
-
+        scale_factor = 1.0 * injection_snr / nomf_snr        
+        
         strain = {}
-        for det in ('H1', 'L1', 'V1'):
-
+        for det in ('H1', 'L1'):
+                        
+#            f_lower = 20
+#            psds_noise[det] = interpolate(psds_noise[det], noise[det].delta_f)
+#            idx = int(psds_noise[det].duration * f_lower)
+#            psds_noise[det][:idx] = psds_noise[det][idx]
+#            psds_noise[det][-1:] = psds_noise[det][-2]
+            # Whiten the noise
+#            noise[det] = (noise[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()           
+            
             # Add the simulated waveform into the noise, using a scaling
             # factor to ensure that the resulting NOMF-SNR equals the chosen
             # injection SNR
             strain[det] = noise[det].add_into(scale_factor *
                                               detector_signals[det])          # Change for SNR Variable
+            
+ #           strain[det] = noise[det].add_into(detector_signals[det])          # Change for SNR Variable
+
+            # Normalize the whitened waveforms between -1 and 1 if necessary.
+#            whitened_waveforms[det] /= np.amax(np.absolute(whitened_waveforms[det].numpy()))
+                   
             
 #            strain[det] = noise[det].add_into(detector_signals[det])
 
@@ -261,8 +313,8 @@ def generate_sample(static_arguments,
         # Store the information we have computed ourselves
         injection_parameters = {'scale_factor': scale_factor,
                                 'h1_snr': snrs['H1'],
-                                'l1_snr': snrs['L1'],
-                                'v1_snr': snrs['V1']}
+                                'l1_snr': snrs['L1']}
+        #                       'v1_snr': snrs['V1']}
 
         # Also add the waveform parameters we have sampled
         for key, value in waveform_params.items():
@@ -272,7 +324,7 @@ def generate_sample(static_arguments,
     # Whiten and bandpass the strain (also for noise-only samples)
     # -------------------------------------------------------------------------
 
-    for det in ('H1', 'L1', 'V1'):
+    for det in ('H1', 'L1'):
 
         # Get the whitening parameters
         segment_duration = static_arguments['whitening_segment_duration']
@@ -281,19 +333,26 @@ def generate_sample(static_arguments,
         # Whiten the strain (using the built-in whitening of PyCBC)
         # We don't need to remove the corrupted samples here, because we
         # crop the strain later on
-#        strain[det] = \
-#            strain[det].whiten(segment_duration=segment_duration,
-#                               max_filter_duration=max_filter_duration,
-#                               remove_corrupted=False)
+        strain[det] = \
+            strain[det].whiten(segment_duration=segment_duration,
+                               max_filter_duration=max_filter_duration,
+                               remove_corrupted=False)
 
         # Calculate the noise spectrum        
         
-        f_lower = 20
-        psds_noise[det] = interpolate(psds_noise[det], strain[det].delta_f)
-        idx = int(psds_noise[det].duration * f_lower)
-        psds_noise[det][:idx] = psds_noise[det][idx]
-        psds_noise[det][-1:] = psds_noise[det][-2]
-        strain[det] = (strain[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()
+    #    f_lower = 20
+    #    psds_noise[det] = interpolate(psds_noise[det], strain[det].delta_f)
+    #    idx = int(psds_noise[det].duration * f_lower)
+    #    psds_noise[det][:idx] = psds_noise[det][idx]
+    #    psds_noise[det][-1:] = psds_noise[det][-2]
+#   #     dt = 1./target_sampling_rate
+#   #     norm = 1./np.sqrt(1./(dt*2))
+    #    strain[det] = (strain[det].to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()
+
+# Standardize the strain, if necessary. 
+
+    #    std_dev = np.std(strain[det].numpy())
+    #    strain[det] = strain[det]/std_dev   
 
         # Get the limits for the bandpass
         bandpass_lower = static_arguments['bandpass_lower']
@@ -318,7 +377,7 @@ def generate_sample(static_arguments,
     # -------------------------------------------------------------------------
 
     
-    for det in ('H1', 'L1', 'V1'):
+    for det in ('H1', 'L1'):
         
         if waveform_params is not None:
             t_shift = waveform_params['t_shift']
@@ -352,14 +411,20 @@ def generate_sample(static_arguments,
                 np.array(detector_signals['H1'])
             injection_parameters['l1_signal'] = \
                 np.array(detector_signals['L1'])
-            injection_parameters['v1_signal'] = \
-                np.array(detector_signals['V1'])
+    #       injection_parameters['v1_signal'] = \
+    #           np.array(detector_signals['V1'])
             injection_parameters['h1_signal_whitened'] = \
                 np.array(whitened_waveforms['H1'])
             injection_parameters['l1_signal_whitened'] = \
                 np.array(whitened_waveforms['L1'])
-            injection_parameters['v1_signal_whitened'] = \
-                np.array(whitened_waveforms['V1'])
+    #        injection_parameters['v1_signal_whitened'] = \
+    #            np.array(whitened_waveforms['V1'])
+            injection_parameters['psd_noise_h1'] = \
+                np.array(psds_noise['H1'])
+            injection_parameters['psd_noise_l1'] = \
+                np.array(psds_noise['L1'])
+    #        injection_parameters['psd_noise_v1'] = \
+    #            np.array(psds_noise['V1'])
             
         elif waveform_params is None:
 
@@ -367,14 +432,20 @@ def generate_sample(static_arguments,
                 np.array(detector_signals['H1'])
             injection_parameters['l1_signal'] = \
                 np.array(detector_signals['L1'])
-            injection_parameters['v1_signal'] = \
-                np.array(detector_signals['V1'])
+        #    injection_parameters['v1_signal'] = \
+        #        np.array(detector_signals['V1'])
             injection_parameters['h1_signal_whitened'] = \
                 np.array(detector_signals['H1'])
             injection_parameters['l1_signal_whitened'] = \
                 np.array(detector_signals['L1'])
-            injection_parameters['v1_signal_whitened'] = \
-                np.array(detector_signals['V1'])
+        #    injection_parameters['v1_signal_whitened'] = \
+        #        np.array(detector_signals['V1'])
+        ##    injection_parameters['psd_noise_h1'] = \
+        ##        np.array(psds_noise['H1'])
+        ##    injection_parameters['psd_noise_l1'] = \
+        ##        np.array(psds_noise['L1'])
+        ##    injection_parameters['psd_noise_v1'] = \
+        ##        np.array(psds_noise['V1'])
             
     # -------------------------------------------------------------------------
     # Collect all available information about this sample and return results
@@ -385,8 +456,8 @@ def generate_sample(static_arguments,
     # O(10^-{30}) and thus requires 64-bit floats).
     sample = {'event_time': event_time,
               'h1_strain': np.array(strain['H1']).astype(np.float32),
-              'l1_strain': np.array(strain['L1']).astype(np.float32),
-              'v1_strain': np.array(strain['V1']).astype(np.float32)}
+              'l1_strain': np.array(strain['L1']).astype(np.float32)}
+#             'v1_strain': np.array(strain['V1']).astype(np.float32)}
 
     return sample, injection_parameters
 
