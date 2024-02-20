@@ -228,5 +228,3 @@ class ProgressBar:
         if not clear_line:
             sys.stdout.write('\n')
         sys.stdout.flush()
-
-        
