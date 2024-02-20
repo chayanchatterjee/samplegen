@@ -213,7 +213,7 @@ def get_waveform(static_arguments,
                                    coa_phase=waveform_params['coa_phase'],
                                    delta_f=static_arguments['delta_f'],
                                    delta_t=static_arguments['delta_t'],
-#                                   distance=waveform_params['distance'], # Change for SNR Variable
+                                   distance=static_arguments['distance'], # Change for SNR Variable
                                    f_lower=static_arguments['f_lower'],
 #                                   f_ref=static_arguments['f_ref'],
                                    inclination=waveform_params['inclination'],
@@ -225,6 +225,7 @@ def get_waveform(static_arguments,
                                    spin2y=spin2y,
                                    spin1z=spin1z,
                                    spin2z=spin2z)
+ #                                  mode_array=[(2,2)])
     
     
     
@@ -233,13 +234,14 @@ def get_waveform(static_arguments,
                                  coa_phase=waveform_params['coa_phase'],
                                  delta_f=static_arguments['delta_f'],
                                  delta_t=static_arguments['delta_t'],
-#                                 distance=waveform_params['distance'],  # Change for SNR Variable
+                                 distance=static_arguments['distance'],  # Change for SNR Variable
                                  f_lower=static_arguments['f_lower'],
                                  inclination=waveform_params['inclination'],
                                  mass1=waveform_params['mass1'],
                                  mass2=waveform_params['mass2'],
                                  spin1z=waveform_params['spin1z'],
                                  spin2z=waveform_params['spin2z'])
+#                                 mode_array=[(2,2)])
 
     # Perform the actual simulation with the given parameters
     h_plus, h_cross = simulate_waveform(**simulation_parameters)
@@ -307,10 +309,10 @@ def get_detector_signals(static_arguments,
     detector_signals = {}
 
     # Set up detectors
-    detectors = {'H1': Detector('H1'), 'L1': Detector('L1'), 'V1': Detector('V1')}
+    detectors = {'H1': Detector('H1'), 'L1': Detector('L1')}
 
     # Loop over both detectors and calculate the signal we would see there
-    for detector_name in ('H1', 'L1', 'V1'):
+    for detector_name in ('H1', 'L1'):
 
         # Set up the detector based on its name
         detector = detectors[detector_name]
