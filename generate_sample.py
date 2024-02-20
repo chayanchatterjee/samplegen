@@ -371,7 +371,7 @@ if __name__ == '__main__':
     # Group all samples by detector
     h1_samples = [_['h1_strain'] for _ in all_samples]
     l1_samples = [_['l1_strain'] for _ in all_samples]
-    v1_samples = [_['v1_strain'] for _ in all_samples]
+ #   v1_samples = [_['v1_strain'] for _ in all_samples]
 
     # Stack recordings along first axis
 
@@ -385,7 +385,7 @@ if __name__ == '__main__':
 
     h1_samples = np.vstack(h1_samples)
     l1_samples = np.vstack(l1_samples)
-    v1_samples = np.vstack(v1_samples)
+ #   v1_samples = np.vstack(v1_samples)
 
     # Compute the mean and standard deviation for both detectors as the median
     # of the means / standard deviations for each sample. This is more robust
@@ -394,10 +394,10 @@ if __name__ == '__main__':
     normalization_parameters = \
         dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
              l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
-             v1_mean=np.median(np.mean(v1_samples, axis=1), axis=0),
+ #            v1_mean=np.median(np.mean(v1_samples, axis=1), axis=0),
              h1_std=np.median(np.std(h1_samples, axis=1), axis=0),
-             l1_std=np.median(np.std(l1_samples, axis=1), axis=0),
-             v1_std=np.median(np.std(v1_samples, axis=1), axis=0))
+             l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
+ #            v1_std=np.median(np.std(v1_samples, axis=1), axis=0))
     
     print('Done!\n')
 
@@ -418,7 +418,7 @@ if __name__ == '__main__':
 
     # Collect and add samples (with and without injection)
     for sample_type in ('injection_samples', 'noise_samples'):
-        for key in ('event_time', 'h1_strain', 'l1_strain', 'v1_strain'):
+        for key in ('event_time', 'h1_strain', 'l1_strain'):
             if samples[sample_type]:
                 value = np.array([_[key] for _ in list(samples[sample_type])])
                         
@@ -428,7 +428,7 @@ if __name__ == '__main__':
 
     # Collect and add injection_parameters (ignore noise samples here, because
     # for those, the injection_parameters are always None)
-    other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'v1_signal', 'v1_signal_whitened', 'v1_snr', 'scale_factor']
+    other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
             value = np.array([_[key] for _ in
@@ -453,7 +453,7 @@ if __name__ == '__main__':
             value = None
         sample_file_dict['injection_parameters'][key] = value
         
-    noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened', 'v1_signal', 'v1_signal_whitened']    
+    noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened']    
     for key in list(noise_keys):
         if injection_parameters['noise_samples']:
             value = np.array([_[key] for _ in injection_parameters['noise_samples']])
