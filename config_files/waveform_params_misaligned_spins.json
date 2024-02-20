@@ -29,9 +29,10 @@ injection_snr =
 ; IMRPhenomHM for higher-order modes (non-precessing), IMRPhenomPv2 for precessing (no higher order modes).
 approximant = IMRPhenomXPHM
 domain = time
-f_lower = 20
+f_lower = 30
 distance = 100
 waveform_length = 128
+
 
 ; Width of the background noise interval (in seconds) around the event_time,
 ; which is used to make the injection. Should be larger than (see below):
@@ -42,6 +43,7 @@ noise_interval_width = 16
 ; original_sampling_rate = Sampling rate of raw HDF files (usually 4096 Hz)
 ; target_sampling_rate = Desired sampling rate for sample generation output
 original_sampling_rate = 4096
+# For SEOBNRv4PHM, the target_sampling_rate should be 4096
 target_sampling_rate = 2048
 
 ; Define parameters for the whitening procedure. See documentation of the
@@ -51,7 +53,8 @@ whitening_segment_duration = 4
 whitening_max_filter_duration = 4
 
 ; Define the lower and upper bound for the bandpass filter (in Hertz)
-bandpass_lower = 20
+bandpass_lower = 30
+# For SEOBNRv4PHM, this should be 4096
 bandpass_upper = 2048
 #bandpass_upper = 500
 
@@ -130,6 +133,25 @@ name = uniform_solidangle
 polar-angle = spin2_polar
 azimuthal-angle = spin2_azimuthal
 
+#[waveform_transforms-spin1x+spin1y+spin1z]
+#name = spherical_to_cartesian
+#x = spin1x
+#y = spin1y
+#z = spin1z
+#radial = spin1_a
+#polar = spin1_polar
+#azimuthal = spin1_azimuthal
+
+#[waveform_transforms-spin2x+spin2y+spin2z]
+#name = spherical_to_cartesian
+#x = spin2x
+#y = spin2y
+#z = spin2z
+#radial = spin2_a
+#polar = spin2_polar
+#azimuthal = spin2_azimuthal
+
+
 [prior-t_shift]
 name = uniform
 min-t_shift = -0.1
@@ -147,8 +169,8 @@ max-t_shift = 0.1
 ; Prior for the injection SNR
 name = uniform
 #filename = snr_49.hdf
-min-injection_snr = 30
-max-injection_snr = 40
+min-injection_snr = 20.0
+max-injection_snr = 30.0
 
 
 [prior-coa_phase]
@@ -159,6 +181,9 @@ name = uniform_angle
 [prior-inclination]
 #; Inclination prior
 name = sin_angle
+#name = uniform
+#min-inclination = 0.39269908169
+#max-inclination = 0.98174770424
 
 #[prior-ra+dec]
 #; Sky position prior
@@ -184,7 +209,11 @@ name = uniform_angle
 name = custom
 constraint_arg = mass2 <= mass1
 
-[constraint-2]
-name = custom
-constraint_arg = mchirp_from_mass1_mass2(mass1, mass2) <= 10
+#[constraint-2]
+#name = custom
+#constraint_arg = mchirp_from_mass1_mass2(mass1, mass2) >= 10
+
+#[constraint-3]
+#name = custom
+#constraint_arg = mchirp_from_mass1_mass2(mass1, mass2) <= 20
 
