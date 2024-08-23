@@ -21,6 +21,8 @@ from tqdm import tqdm
 
 from utils.configfiles import read_ini_config, read_json_config
 from utils.hdffiles import NoiseTimeline
+from utils.hdffiles_DeepClean import NoiseTimeline_DC
+from utils.hdffiles_original import NoiseTimeline_original
 from utils.samplefiles import SampleFile
 from utils.samplegeneration import generate_sample
 from utils.waveforms import WaveformParameterGenerator
@@ -46,16 +48,28 @@ def queue_worker(arguments, results_queue):
     
     # Try to generate a sample using the given arguments and store the result
     # in the given result_queue (which is shared across all worker processes).
+    
+    index, arguments = arguments
     try:
         result = generate_sample(**arguments)
-        results_queue.put(result)
-        sys.exit(0)
-    
+        results_queue.put((index, result))
+
     # For some arguments, LALSuite crashes during the sample generation.
     # In this case, terminate with a non-zero exit code to make sure a new
     # set of argument is added to the main arguments_queue
-    except RuntimeError:
-        sys.exit('Runtime Error')
+    except RuntimeError as e:
+        print(f"Runtime Error in process: {e}")
+    finally:
+        sys.exit(0)
+    
+    
+#    try:
+#        result = generate_sample(**arguments)
+#        results_queue.put(result)
+#        sys.exit(0)
+    
+#    except RuntimeError:
+#        sys.exit('Runtime Error')
 
 
 # -----------------------------------------------------------------------------
@@ -93,9 +107,30 @@ if __name__ == '__main__':
                         help='integer seconds of template to truncate.', type=int,
                         default=0)
 
+    parser.add_argument('--n-noise-realizations', 
+                        help='Number of noise realizations for each template.', type=int,
+                        default=1)
+
+    #parser.add_argument('--add-glitches', 
+    #                    help='Whether glitches should be added or not?',
+    #                    action='store_true')
+
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
     command_line_arguments = vars(parser.parse_args())
+
+    # Asking for additional input if --add-glitches is True
+    #if command_line_arguments['add_glitches']:
+    #    glitch_name = input("Enter the name of the glitch to add: ")
+    #    # Now you can use `glitch_name` as the name of the glitch
+    #    print(f"Glitch to add: {glitch_name}")
+
+    #    glitch_name = glitch_name.replace(" ", "_").lower()
+
+    #else:
+    #    print("No glitches will be added.")
+
+
     print('Done!')
 
     # -------------------------------------------------------------------------
@@ -167,28 +202,88 @@ if __name__ == '__main__':
         # None, so that we know that we need to generate synthetic noise.
         noise_times = ((1000000000 + _, None) for _ in count())
 
+    elif config['background_data_directory'] == 'Deep_Clean_data' or config['background_data_directory'] == 'Deep_Clean_data_test':
+
+        print('Using data from Deep Clean '
+            '(background_data_directory = {})'.format(bkg_data_dir))
+        print('Reading in Deep Clean data. This may take several minutes...', end=' ')
+
+        # Create a timeline object by running over all HDF files once
+        noise_timeline = NoiseTimeline_DC(background_data_directory=bkg_data_dir,
+                                        random_seed=random_seed)
+
+        
+        delta_t = int(static_arguments['noise_interval_width'] / 2)
+        
+        noise_times = (noise_timeline.sample(delta_t=delta_t,
+                                            return_paths=True)
+                            for _ in iter(int, 1))
+            
+
+        print('Done!\n')
+
+    elif config['background_data_directory'] == 'Original_data' or config['background_data_directory'] == 'Original_data_test':
+
+        print('Using original data '
+            '(background_data_directory = {})'.format(bkg_data_dir))
+        print('Reading in original data. This may take several minutes...', end=' ')
+
+        # Create a timeline object by running over all HDF files once
+        noise_timeline = NoiseTimeline_original(background_data_directory=bkg_data_dir,
+                                        random_seed=random_seed)
+
+        
+        delta_t = int(static_arguments['noise_interval_width'] / 2)
+        
+        noise_times = (noise_timeline.sample(delta_t=delta_t,
+                                            return_paths=True)
+                            for _ in iter(int, 1))
+            
+
+        print('Done!\n')
+
+
     # Otherwise, we set up a timeline object for the background noise, that
     # is, we read in all HDF files in the raw_data_directory and figure out
     # which parts of it are useable (i.e., have the right data quality and
     # injection bits set as specified in the config file).
     else:
 
+    #    def generate_noise_times(num_iterations):
+    #        delta_t = int(static_arguments['noise_interval_width'] / 2)
+    #        for _ in range(num_iterations):
+    #            yield (noise_timeline.sample(delta_t=delta_t,
+    #                                 dq_bits=config['dq_bits'],
+    #                                 inj_bits=config['inj_bits'],
+    #                                 return_paths=True)
+    #                    for _ in iter(int, 1))
+
         print('Using real noise from LIGO recordings! '
-              '(background_data_directory = {})'.format(bkg_data_dir))
+            '(background_data_directory = {})'.format(bkg_data_dir))
         print('Reading in raw data. This may take several minutes...', end=' ')
 
         # Create a timeline object by running over all HDF files once
         noise_timeline = NoiseTimeline(background_data_directory=bkg_data_dir,
-                                       random_seed=random_seed)
+                                        random_seed=random_seed)
+
+#        noise_timeline_1 = NoiseTimeline(background_data_directory=bkg_data_dir,
+#                                        random_seed=(random_seed+100))
 
         # Create a noise time generator so that can sample valid noise times
         # simply by calling next(noise_time_generator)
         delta_t = int(static_arguments['noise_interval_width'] / 2)
+
         noise_times = (noise_timeline.sample(delta_t=delta_t,
-                                             dq_bits=config['dq_bits'],
-                                             inj_bits=config['inj_bits'],
-                                             return_paths=True)
-                       for _ in iter(int, 1))
+                                            dq_bits=config['dq_bits'],
+                                            inj_bits=config['inj_bits'],
+                                            return_paths=True)
+                            for _ in iter(int, 1))
+        
+    #    noise_times_1 = (noise_timeline_1.sample(delta_t=delta_t,
+    #                                        dq_bits=config['dq_bits'],
+    #                                        inj_bits=config['inj_bits'],
+    #                                        return_paths=True)
+    #                    for _ in iter(int, 1))
         
         print('Done!\n')
 
@@ -203,9 +298,11 @@ if __name__ == '__main__':
 
         # Return all necessary arguments as a dictionary
         return dict(static_arguments=static_arguments,
-                    event_tuple=next(noise_times),
-                    waveform_params=waveform_params)
-
+                        event_tuple=next(noise_times),
+#                       add_glitches=command_line_arguments['add_glitches'],
+#                       glitch_name=glitch_name,
+                        waveform_params=waveform_params)
+        
     # -------------------------------------------------------------------------
     # Finally: Create our samples!
     # -------------------------------------------------------------------------
@@ -225,7 +322,7 @@ if __name__ == '__main__':
         
         if sample_type == 'injection_samples':
             print('Generating samples containing an injection...')
-            n_samples = config['n_injection_samples']
+            n_samples = config['n_injection_samples']*command_line_arguments['n_noise_realizations']
             arguments_generator = \
                 (generate_arguments(injection=True) for _ in iter(int, 1))
             
@@ -250,8 +347,29 @@ if __name__ == '__main__':
         # Initialize a Queue and fill it with as many arguments as we
         # want to generate samples
         arguments_queue = Queue()
+        start = next(arguments_generator)  # Fetch the first set of arguments
+
         for i in range(n_samples):
-            arguments_queue.put(next(arguments_generator))
+            if i == 0:
+            # Always put the first arguments into the queue
+                arguments_queue.put((i, start))
+                prev_arguments_generator = start  # Save the first arguments to use later
+
+            elif (i % command_line_arguments['n_noise_realizations'] == 0):
+            # Fetch new arguments from the generator every 'n_noise_realizations' steps
+                new_args = next(arguments_generator)
+                arguments_queue.put((i, new_args))
+                prev_arguments_generator = new_args  # Update the previous arguments
+            else:
+            # Generate new arguments with the same waveform_params but a new noise realization
+                new_args = {
+                    'static_arguments': prev_arguments_generator['static_arguments'],
+                    'event_tuple': next(noise_times),  # Fetch a new noise realization
+                    'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
+                }
+        
+                arguments_queue.put((i, new_args))
+                prev_arguments_generator = new_args  # Update the previous arguments to include the new noise realization
 
         # Initialize a Queue and a list to store the generated samples
         results_queue = Queue()
@@ -346,16 +464,20 @@ if __name__ == '__main__':
         # Process results in the results_list
         # ---------------------------------------------------------------------
 
+        # Sort results by index and extract just the results
+        results_list.sort(key=lambda x: x[0])  # Sort by the first element of the tuple, the index
+        results_list = [result[1] for result in results_list]  # Extract the second element, the actual result
+
         # Separate the samples and the injection parameters
         samples[sample_type], injection_parameters[sample_type] = \
             zip(*results_list)
 
         # Sort all results by the event_time
-        idx = np.argsort([_['event_time'] for _ in list(samples[sample_type])])
-        samples[sample_type] = \
-            list([samples[sample_type][i] for i in idx])
-        injection_parameters[sample_type] = \
-            list([injection_parameters[sample_type][i] for i in idx])
+#        idx = np.argsort([_['event_time'] for _ in list(samples[sample_type])])
+#        samples[sample_type] = \
+#            list([samples[sample_type][i] for i in idx])
+#        injection_parameters[sample_type] = \
+#            list([injection_parameters[sample_type][i] for i in idx])
 
         print('Sample generation completed!\n')
 
@@ -493,3 +615,4 @@ if __name__ == '__main__':
     # Print the total run time
     print('Total runtime: {:.1f} seconds!'.format(time.time() - script_start))
     print('')
+
