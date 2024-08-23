@@ -1,0 +1,17 @@
+{
+  "random_seed": 640,
+  "template_random_seed": 10,
+  "background_data_directory": "O3b_noise_test",
+  "dq_bits": [0, 1, 2, 3],
+  "inj_bits": [0, 1, 2, 4],
+  "waveform_params_file_name": "waveform_params_NRSur.ini",
+  "max_runtime": 6000,
+  "n_injection_samples": 1,
+  "n_noise_samples": 0,
+  "n_processes": 30,
+  "n_template_samples": 0,
+  "output_file_name": "O3b_GW190412_test_NRHybSur3dq8_comparison.hdf",
+  "snr_output_file_name": "default_snr_series_test_1_sec_10to80_for_cm_1.hdf",
+  "template_output_file_name": "default_templates.hdf"
+}
+
