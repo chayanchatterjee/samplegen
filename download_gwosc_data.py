@@ -15,7 +15,6 @@ import requests
 
 from utils.progressbar import ProgressBar
 
-
 # -----------------------------------------------------------------------------
 # MAIN CODE
 # -----------------------------------------------------------------------------
@@ -33,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--observation-run',
                         help='Observation run for which to download data '
                              '(default: O1).',
-                        default='O1')
+                        default='O3a_4KHZ_R1')
     parser.add_argument('--gps-start-time',
                         help='Start time (GPS) of data to download '
                              '(default: 1126051217).',
