@@ -64,7 +64,7 @@ class WaveformParameterGenerator(object):
         dist = read_distributions_from_config(config_file)
 
         # Extract transformations
-        self.trans = read_transforms_from_config(config_file)
+        self.trans = read_transforms_from_config(config_file, section="waveform_transforms")
 
         # Set up a joint distribution to sample from
         self.pval = JointDistribution(self.var_args,
@@ -192,7 +192,26 @@ def get_waveform(static_arguments,
 
     # Collect all the required parameters for the simulation from the given
     # static and variable parameters
-    
+
+    if 'chirp_distance' in waveform_params:    
+
+        config_file_path = '/fred/oz016/Chayan/samplegen_old/config_files/waveform_params_NRSur.ini'
+        config_file = WorkflowConfigParser(configFiles=[config_file_path])
+        trans = read_transforms_from_config(config_file,section="waveform_transforms")
+
+        chirp_distance_array = waveform_params['chirp_distance']
+        mass1_array = waveform_params['mass1'][()]
+        mass2_array = waveform_params['mass2'][()]
+
+        samples = {
+            'chirp_distance': chirp_distance_array,
+            'mass1': mass1_array,
+            'mass2': mass2_array
+        }
+        values = apply_transforms(samples, trans)
+        distance = values['distance'][()]
+
+
     if 'spin1_a' in waveform_params:
         
         spin1_a = waveform_params['spin1_a']
@@ -214,6 +233,8 @@ def get_waveform(static_arguments,
                                    delta_f=static_arguments['delta_f'],
                                    delta_t=static_arguments['delta_t'],
                                    distance=static_arguments['distance'], # Change for SNR Variable
+#                                   chirp_distance=waveform_params['chirp_distance'],
+#                                   distance=distance,
                                    f_lower=static_arguments['f_lower'],
 #                                   f_ref=static_arguments['f_ref'],
                                    inclination=waveform_params['inclination'],
@@ -225,17 +246,35 @@ def get_waveform(static_arguments,
                                    spin2y=spin2y,
                                    spin1z=spin1z,
                                    spin2z=spin2z)
- #                                  mode_array=[(2,2)])
+#                                   mode_array=[(2,2)])
+
+    elif 'eccentricity' in waveform_params:
+
+        simulation_parameters = dict(approximant=static_arguments['approximant'],
+                                   coa_phase=waveform_params['coa_phase'],
+                                   delta_f=static_arguments['delta_f'],
+                                   delta_t=static_arguments['delta_t'],
+                                   distance=static_arguments['distance'], # Change for SNR Variable
+#                                   chirp_distance=waveform_params['chirp_distance'],
+#                                   distance=distance,
+                                   eccentricity=waveform_params['eccentricity'],
+                                   f_lower=static_arguments['f_lower'],
+                                   f_ref=static_arguments['f_ref'],
+                                   inclination=waveform_params['inclination'],
+                                   mass1=waveform_params['mass1'],
+                                   mass2=waveform_params['mass2'])
     
     
-    
-    else:
+    elif 'spin1_a' not in waveform_params and 'eccentricity' not in waveform_params:
         simulation_parameters = dict(approximant=static_arguments['approximant'],
                                  coa_phase=waveform_params['coa_phase'],
                                  delta_f=static_arguments['delta_f'],
                                  delta_t=static_arguments['delta_t'],
                                  distance=static_arguments['distance'],  # Change for SNR Variable
+#                                 chirp_distance=waveform_params['chirp_distance'],
+#                                 distance=distance,
                                  f_lower=static_arguments['f_lower'],
+#                                 f_ref=static_arguments['f_ref'],
                                  inclination=waveform_params['inclination'],
                                  mass1=waveform_params['mass1'],
                                  mass2=waveform_params['mass2'],
