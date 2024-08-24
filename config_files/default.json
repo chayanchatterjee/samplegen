@@ -1,7 +1,7 @@
 {
   "random_seed": 800,
   "template_random_seed": 10,
-  "background_data_directory": "O3b_noise",
+  "background_data_directory": null,
   "dq_bits": [0, 1, 2, 3],
   "inj_bits": [0, 1, 2, 4],
   "waveform_params_file_name": "waveform_params.ini",
