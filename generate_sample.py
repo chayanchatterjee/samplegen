@@ -111,19 +111,19 @@ if __name__ == '__main__':
                         help='Number of noise realizations for each template.', type=int,
                         default=1)
 
-    #parser.add_argument('--add-glitches', 
-    #                    help='Whether glitches should be added or not?',
-    #                    action='store_true')
+    parser.add_argument('--add-glitches', type=str,
+                        help='What type of glitch to add',
+                        default=None)
 
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
     command_line_arguments = vars(parser.parse_args())
 
     # Asking for additional input if --add-glitches is True
-    #if command_line_arguments['add_glitches']:
-    #    glitch_name = input("Enter the name of the glitch to add: ")
-    #    # Now you can use `glitch_name` as the name of the glitch
-    #    print(f"Glitch to add: {glitch_name}")
+    if command_line_arguments['add_glitches'] is not None:
+#        glitch_name = input("Enter the name of the glitch to add: ")
+        # Now you can use `glitch_name` as the name of the glitch
+        print(f"Glitch to add: {command_line_arguments['add_glitches']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
@@ -299,7 +299,7 @@ if __name__ == '__main__':
         # Return all necessary arguments as a dictionary
         return dict(static_arguments=static_arguments,
                         event_tuple=next(noise_times),
-#                       add_glitches=command_line_arguments['add_glitches'],
+                        add_glitches=command_line_arguments['add_glitches'],
 #                       glitch_name=glitch_name,
                         waveform_params=waveform_params)
         
