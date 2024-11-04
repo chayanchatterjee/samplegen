@@ -436,7 +436,7 @@ def generate_sample(static_arguments,
 
         
         if add_glitches is not None:
-            glitch_file_path = '/home/chayan.chatterjee/samplegen/Glitch_data/combined_strains_snr_' + add_glitches + '_whitened_1.hdf5'
+            glitch_file_path = '/home/chayan.chatterjee/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches +'_whitened_1.hdf5'
         try:
             with h5py.File(glitch_file_path, 'r') as f1:
                 glitch_strain_data = f1['Strain'][()]

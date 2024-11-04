@@ -98,7 +98,7 @@ if __name__ == '__main__':
         os.mkdir(output_dir)
 
     # Construct path to results file and open it to ensure its empty
-    results_file = os.path.join(output_dir, 'real_events_GW190403_051519_test.hdf')
+    results_file = os.path.join(output_dir, 'real_events_GWTC-1.hdf')
     with h5py.File(results_file, 'w'):
         pass
 
@@ -107,15 +107,15 @@ if __name__ == '__main__':
     # -------------------------------------------------------------------------
 
     # Set up a new catalog
-    catalog = Catalog(source='gwtc-2.1')
+    catalog = Catalog(source='gwtc-1')
     
-    events = ['GW190403_051519-v1']
+#    events = ['GW190403_051519-v1']
     
     psd = {}
 
     # Loop over the events it contains
-#    for event in sorted(catalog.names):
-    for event in events:
+    for event in sorted(catalog.names):
+#    for event in events:
 
         print('Processing', event.upper())
         print(64 * '-')
@@ -183,12 +183,12 @@ if __name__ == '__main__':
 
         print('Selecting interval around event...', end=' ')
         for det in ('H1', 'L1'):
-#            strain[det] = strain[det].time_slice(catalog[event].time - 0.80,
-#                                                 catalog[event].time + 0.20)
+            strain[det] = strain[det].time_slice(catalog[event].time - 0.20,
+                                                 catalog[event].time + 0.05)
             
-            event_time_L1 = 1238303737.230
-            strain[det] = strain[det].time_slice(event_time_L1 - 0.80,
-                                                 event_time_L1 + 0.20)
+#            event_time_L1 = 1238303737.230
+#            strain[det] = strain[det].time_slice(event_time_L1 - 0.80,
+#                                                 event_time_L1 + 0.20)
             
         print('Done!')
 
