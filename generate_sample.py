@@ -127,8 +127,8 @@ if __name__ == '__main__':
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
-    #else:
-    #    print("No glitches will be added.")
+    else:
+        print("No glitches will be added.")
 
 
     print('Done!')
@@ -365,6 +365,7 @@ if __name__ == '__main__':
                 new_args = {
                     'static_arguments': prev_arguments_generator['static_arguments'],
                     'event_tuple': next(noise_times),  # Fetch a new noise realization
+                    'add_glitches': command_line_arguments['add_glitches'],  # Add glitches parameter
                     'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
                 }
         
