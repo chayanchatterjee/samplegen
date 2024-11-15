@@ -98,7 +98,7 @@ if __name__ == '__main__':
         os.mkdir(output_dir)
 
     # Construct path to results file and open it to ensure its empty
-    results_file = os.path.join(output_dir, 'real_events_GWTC-1.hdf')
+    results_file = os.path.join(output_dir, 'real_events_GWTC-2.1.hdf')
     with h5py.File(results_file, 'w'):
         pass
 
@@ -107,117 +107,97 @@ if __name__ == '__main__':
     # -------------------------------------------------------------------------
 
     # Set up a new catalog
-    catalog = Catalog(source='gwtc-1')
-    
-#    events = ['GW190403_051519-v1']
+    catalog = Catalog(source='gwtc-2.1')
     
     psd = {}
 
     # Loop over the events it contains
     for event in sorted(catalog.names):
-#    for event in events:
+        try:
+            print('Processing', event.upper())
+            print(64 * '-')
 
-        print('Processing', event.upper())
-        print(64 * '-')
+            # Get the strain for detectors H1 and L1
+            strain = dict(H1=catalog[event].strain('H1'),
+                          L1=catalog[event].strain('L1'))
 
-        # Get the strain for detectors H1 and L1 (if necessary, this will
-        # download the  strain from GWOSC)
-        strain = dict(H1=catalog[event].strain('H1'),
-                      L1=catalog[event].strain('L1'))
-#                      V1=catalog[event].strain('V1'),)
+            # -----------------------------------------------------------------
+            # Re-sample to the desired target_sampling_rate
+            # -----------------------------------------------------------------
 
-        # ---------------------------------------------------------------------
-        # Re-sample to the desired target_sampling_rate
-        # ---------------------------------------------------------------------
+            print('Re-sampling to {} Hz...'.format(target_sampling_rate), end=' ')
+            resampling_factor = int(static_arguments['original_sampling_rate'] /
+                                    static_arguments['target_sampling_rate'])
 
-        print('Re-sampling to {} Hz...'.format(target_sampling_rate), end=' ')
-
-        # Compute the re-sampling factor
-        resampling_factor = int(static_arguments['original_sampling_rate'] /
-                                static_arguments['target_sampling_rate'])
-
-        # Re-sample the time series for both detectors
-        for det in ('H1', 'L1'):
-            strain[det] = \
-                TimeSeries(initial_array=strain[det][::resampling_factor],
-                           delta_t=1.0 / target_sampling_rate,
-                           epoch=strain[det].start_time)
-        
-        print('Done!')
-
-        # ---------------------------------------------------------------------
-        # Whiten and band-pass the data
-        # ---------------------------------------------------------------------
-
-        for det in ('H1', 'L1'):
-
-            # Whiten the 512 second stretch with a 4 second window
-            print('Whitening the data...', end=' ')
-            strain[det], psd[det] = \
-                strain[det].whiten(segment_duration=segment_duration,
-                                   max_filter_duration=max_filter_duration,
-                                   remove_corrupted=False, return_psd=True)
-            print('Done!')
-
-            # Apply a high-pass to remove everything below `bandpass_lower`
-            print('High-passing the data...', end=' ')
-            if bandpass_lower != 0:
+            for det in ('H1', 'L1'):
                 strain[det] = \
-                    strain[det].highpass_fir(frequency=bandpass_lower,
-                                             remove_corrupted=False,
-                                             order=512)
+                    TimeSeries(initial_array=strain[det][::resampling_factor],
+                               delta_t=1.0 / target_sampling_rate,
+                               epoch=strain[det].start_time)
             print('Done!')
 
-            # Apply a low-pass to remove everything above `bandpass_upper`
-            print('Low-passing the data...', end=' ')
-            if bandpass_upper != target_sampling_rate:
-                strain[det] = \
-                    strain[det].lowpass_fir(frequency=bandpass_upper,
-                                            remove_corrupted=False,
-                                            order=512)
+            # -----------------------------------------------------------------
+            # Whiten and band-pass the data
+            # -----------------------------------------------------------------
+
+            for det in ('H1', 'L1'):
+                print('Whitening the data...', end=' ')
+                strain[det], psd[det] = \
+                    strain[det].whiten(segment_duration=segment_duration,
+                                       max_filter_duration=max_filter_duration,
+                                       remove_corrupted=False, return_psd=True)
+                print('Done!')
+
+                print('High-passing the data...', end=' ')
+                if bandpass_lower != 0:
+                    strain[det] = \
+                        strain[det].highpass_fir(frequency=bandpass_lower,
+                                                 remove_corrupted=False,
+                                                 order=512)
+                print('Done!')
+
+                print('Low-passing the data...', end=' ')
+                if bandpass_upper != target_sampling_rate:
+                    strain[det] = \
+                        strain[det].lowpass_fir(frequency=bandpass_upper,
+                                                remove_corrupted=False,
+                                                order=512)
+                print('Done!')
+
+            # -----------------------------------------------------------------
+            # Select interval around event to remove corrupted edges
+            # -----------------------------------------------------------------
+
+            print('Selecting interval around event...', end=' ')
+            for det in ('H1', 'L1'):
+                strain[det] = strain[det].time_slice(catalog[event].time - 0.80,
+                                                     catalog[event].time + 0.20)
             print('Done!')
 
-        # ---------------------------------------------------------------------
-        # Select interval around event to remove corrupted edges
-        # ---------------------------------------------------------------------
+            # -----------------------------------------------------------------
+            # Save the resulting samples as HDF files again
+            # -----------------------------------------------------------------
 
-        print('Selecting interval around event...', end=' ')
-        for det in ('H1', 'L1'):
-            strain[det] = strain[det].time_slice(catalog[event].time - 0.20,
-                                                 catalog[event].time + 0.05)
-            
-#            event_time_L1 = 1238303737.230
-#            strain[det] = strain[det].time_slice(event_time_L1 - 0.80,
-#                                                 event_time_L1 + 0.20)
-            
-        print('Done!')
+            print('Saving strain to HDF file...', end=' ')
+            with h5py.File(results_file, 'a') as hdf_file:
+                hdf_file.create_group(name=event)
+                hdf_file[event].create_dataset(name='h1_strain',
+                                               data=strain['H1'])
+                hdf_file[event].create_dataset(name='l1_strain',
+                                               data=strain['L1'])
+                hdf_file[event].create_dataset(name='h1_psd',
+                                               data=psd['H1'])
+                hdf_file[event].create_dataset(name='l1_psd',
+                                               data=psd['L1'])
+            print('Done!')
 
-        # ---------------------------------------------------------------------
-        # Save the resulting samples as HDF files again
-        # ---------------------------------------------------------------------
+            print(64 * '-')
+            print('')
 
-        print('Saving strain to HDF file...', end=' ')
-        with h5py.File(results_file, 'a') as hdf_file:
-
-            # Create a new group for this event
-            hdf_file.create_group(name=event)
-
-            # Save the post-processed strain for the event
-            hdf_file[event].create_dataset(name='h1_strain',
-                                           data=strain['H1'])
-            hdf_file[event].create_dataset(name='l1_strain',
-                                           data=strain['L1'])
-#            hdf_file[event].create_dataset(name='v1_strain',
-#                                           data=strain['V1'])
-            hdf_file[event].create_dataset(name='h1_psd',
-                                           data=psd['H1'])
-            hdf_file[event].create_dataset(name='l1_psd',
-                                           data=psd['L1'])
-            
-        print('Done!')
-
-        print(64 * '-')
-        print('')
+        except Exception as e:
+            print(f"Skipping {event.upper()} due to error: {e}")
+            print(64 * '-')
+            continue
 
     # -------------------------------------------------------------------------
     # Postliminaries

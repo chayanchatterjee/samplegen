@@ -302,6 +302,7 @@ def get_waveform(static_arguments,
 def get_detector_signals(static_arguments,
                          waveform_params,
                          event_time,
+                         detector,
                          waveform):
     """
     Project the raw `waveform` (i.e., the tuple `(h_plus, h_cross)`
@@ -343,34 +344,100 @@ def get_detector_signals(static_arguments,
 #    right_ascension = waveform_params['ra']
 #    declination = waveform_params['dec']
     polarization = waveform_params['polarization']
-
-    # Store the detector signals we will get through projection
-    detector_signals = {}
-
-    # Set up detectors
-    detectors = {'H1': Detector('H1'), 'L1': Detector('L1')}
-
-    # Loop over both detectors and calculate the signal we would see there
-    for detector_name in ('H1', 'L1'):
-
-        # Set up the detector based on its name
-        detector = detectors[detector_name]
-
+    
+    if detector == ['H1']:
+        detector_signals = {}
         # Calculate the antenna pattern for this detector
         f_plus, f_cross = \
-            detector.antenna_pattern(right_ascension=right_ascension,
-                                     declination=declination,
-                                     polarization=polarization,
-                                     t_gps=1187008882.4)
+            Detector('H1').antenna_pattern(right_ascension=right_ascension,
+                                        declination=declination,
+                                        polarization=polarization,
+                                        t_gps=1126259462.4)
 
         # Calculate the time offset from H1 for this detector
         delta_t_h1 = \
-            detector.time_delay_from_detector(other_detector=detectors['H1'],
-                                              right_ascension=right_ascension,
-                                              declination=declination,
-                                              t_gps=1187008882.4)
+            Detector('H1').time_delay_from_detector(other_detector=Detector('H1'),
+                                                right_ascension=right_ascension,
+                                                declination=declination,
+                                                t_gps=1126259462.4)
         # Project the waveform onto the antenna pattern
         detector_signal = f_plus * h_plus + f_cross * h_cross
+        
+        # Map the signal from geocentric coordinates to the specific
+        # reference frame of the detector. This depends on whether we have
+        # simulated the waveform in the time or frequency domain:
+        if static_arguments['domain'] == 'time':
+            offset = 100 + delta_t_h1 + detector_signal.start_time
+            detector_signal = detector_signal.cyclic_time_shift(offset)
+            detector_signal.start_time = event_time - 100
+        elif static_arguments['domain'] == 'frequency':
+            offset = 100 + delta_t_h1
+            detector_signal = detector_signal.cyclic_time_shift(offset)
+            detector_signal.start_time = event_time - 100
+            detector_signal = detector_signal.to_timeseries()
+        else:
+            raise ValueError('Invalid domain! Must be "time" or "frequency"!')
+    
+    elif detector == ['L1']:
+        # Calculate the antenna pattern for this detector
+        f_plus, f_cross = \
+            Detector('L1').antenna_pattern(right_ascension=right_ascension,
+                                        declination=declination,
+                                        polarization=polarization,
+                                        t_gps=1126259462.4)
+
+        # Calculate the time offset from H1 for this detector
+        delta_t_h1 = \
+            Detector('L1').time_delay_from_detector(other_detector=Detector('H1'),
+                                                right_ascension=right_ascension,
+                                                declination=declination,
+                                                t_gps=1126259462.4)
+            
+        # Project the waveform onto the antenna pattern
+        detector_signal = f_plus * h_plus + f_cross * h_cross
+        
+        # Map the signal from geocentric coordinates to the specific
+        # reference frame of the detector. This depends on whether we have
+        # simulated the waveform in the time or frequency domain:
+        if static_arguments['domain'] == 'time':
+            offset = 100 + delta_t_h1 + detector_signal.start_time
+            detector_signal = detector_signal.cyclic_time_shift(offset)
+            detector_signal.start_time = event_time - 100
+        elif static_arguments['domain'] == 'frequency':
+            offset = 100 + delta_t_h1
+            detector_signal = detector_signal.cyclic_time_shift(offset)
+            detector_signal.start_time = event_time - 100
+            detector_signal = detector_signal.to_timeseries()
+        else:
+            raise ValueError('Invalid domain! Must be "time" or "frequency"!')
+
+    elif set(detector) == {'H1', 'L1'}:
+        # Store the detector signals we will get through projection
+
+        # Set up detectors
+        detectors = {'H1': Detector('H1'), 'L1': Detector('L1')}
+
+        # Loop over both detectors and calculate the signal we would see there
+        for detector_name in ('H1', 'L1'):
+
+            # Set up the detector based on its name
+            det = detectors[detector_name]
+
+            # Calculate the antenna pattern for this detector
+            f_plus, f_cross = \
+                det.antenna_pattern(right_ascension=right_ascension,
+                                        declination=declination,
+                                        polarization=polarization,
+                                        t_gps=1126259462.4)
+
+            # Calculate the time offset from H1 for this detector
+            delta_t_h1 = \
+                det.time_delay_from_detector(other_detector=detectors['H1'],
+                                                right_ascension=right_ascension,
+                                                declination=declination,
+                                                t_gps=1126259462.4)
+            # Project the waveform onto the antenna pattern
+            detector_signal = f_plus * h_plus + f_cross * h_cross
 
         # Map the signal from geocentric coordinates to the specific
         # reference frame of the detector. This depends on whether we have
@@ -387,7 +454,20 @@ def get_detector_signals(static_arguments,
         else:
             raise ValueError('Invalid domain! Must be "time" or "frequency"!')
 
-        # Store the result
-        detector_signals[detector_name] = detector_signal
-
-    return detector_signals
+    detector_signals = {}
+    if detector == ['H1']:
+        detector_signals['H1'] = detector_signal
+        return detector_signals
+        
+    elif detector == ['L1']:
+        detector_signals['L1'] = detector_signal
+#        print(detector_signals['L1'].numpy())
+        return detector_signals
+        
+    elif set(detector) == {'H1', 'L1'}:
+        for detector_name in ('H1', 'L1'):
+            # Store the result
+            detector_signals[detector_name] = detector_signal
+            
+        return detector_signals
+    

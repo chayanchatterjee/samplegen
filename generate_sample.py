@@ -18,6 +18,7 @@ import time
 from itertools import count
 from multiprocessing import Process, Queue
 from tqdm import tqdm
+import h5py
 
 from utils.configfiles import read_ini_config, read_json_config
 from utils.hdffiles import NoiseTimeline
@@ -60,6 +61,7 @@ def queue_worker(arguments, results_queue):
     except RuntimeError as e:
         print(f"Runtime Error in process: {e}")
     finally:
+#        results_queue.put((index, None))  # Indicate failure or no result
         sys.exit(0)
     
     
@@ -110,6 +112,13 @@ if __name__ == '__main__':
     parser.add_argument('--n-noise-realizations', 
                         help='Number of noise realizations for each template.', type=int,
                         default=1)
+    
+    parser.add_argument('--detectors', 
+                    help='List of detectors to use', 
+                    type=str,
+                    nargs='+',  # allows multiple arguments as a list
+                    default=['H1', 'L1'])
+
 
     parser.add_argument('--add-glitches', type=str,
                         help='What type of glitch to add',
@@ -118,6 +127,12 @@ if __name__ == '__main__':
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
     command_line_arguments = vars(parser.parse_args())
+    
+    # Access the detectors argument
+    detectors = command_line_arguments['detectors']
+
+    # Perform operations based on detectors
+    detectors_set = set(detectors)  # Convert to set for easy membership testing
 
     # Asking for additional input if --add-glitches is True
     if command_line_arguments['add_glitches'] is not None:
@@ -301,6 +316,7 @@ if __name__ == '__main__':
                         event_tuple=next(noise_times),
                         add_glitches=command_line_arguments['add_glitches'],
 #                       glitch_name=glitch_name,
+                        detector=command_line_arguments['detectors'],
                         waveform_params=waveform_params)
         
     # -------------------------------------------------------------------------
@@ -366,6 +382,7 @@ if __name__ == '__main__':
                     'static_arguments': prev_arguments_generator['static_arguments'],
                     'event_tuple': next(noise_times),  # Fetch a new noise realization
                     'add_glitches': command_line_arguments['add_glitches'],  # Add glitches parameter
+                    'detector': command_line_arguments['detectors'],  # Add detectors parameter
                     'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
                 }
         
@@ -467,6 +484,9 @@ if __name__ == '__main__':
 
         # Sort results by index and extract just the results
         results_list.sort(key=lambda x: x[0])  # Sort by the first element of the tuple, the index
+        
+#        print(results_list)
+        
         results_list = [result[1] for result in results_list]  # Extract the second element, the actual result
 
         # Separate the samples and the injection parameters
@@ -489,12 +509,23 @@ if __name__ == '__main__':
     print('Computing normalization parameters for sample...', end=' ')
 
     # Gather all samples (with and without injection) in one list
-    all_samples = list(samples['injection_samples'] + samples['noise_samples'])
+    all_samples = list(samples['injection_samples']) + list(samples['noise_samples'])
 
     # Group all samples by detector
-    h1_samples = [_['h1_strain'] for _ in all_samples]
-    l1_samples = [_['l1_strain'] for _ in all_samples]
- #   v1_samples = [_['v1_strain'] for _ in all_samples]
+    if detectors_set == {'H1'}:
+        h1_samples = [_['h1_strain'] for _ in all_samples]
+        h1_samples = np.vstack(h1_samples)
+    elif detectors_set == {'L1'}:
+        l1_samples = [_['l1_strain'] for _ in all_samples]
+        l1_samples = np.vstack(l1_samples)
+    elif detectors_set == {'H1', 'L1'}:
+        h1_samples = [_['h1_strain'] for _ in all_samples]
+        l1_samples = [_['l1_strain'] for _ in all_samples]
+        
+        h1_samples = np.vstack(h1_samples)
+        l1_samples = np.vstack(l1_samples)
+        
+#   v1_samples = [_['v1_strain'] for _ in all_samples]
 
     # Stack recordings along first axis
 
@@ -506,22 +537,32 @@ if __name__ == '__main__':
 #    l1_samples = [row[0:2048] for row in l1_samples]
 #    v1_samples = [row[0:2048] for row in v1_samples]
 
-    h1_samples = np.vstack(h1_samples)
-    l1_samples = np.vstack(l1_samples)
- #   v1_samples = np.vstack(v1_samples)
+    
+    
+#   v1_samples = np.vstack(v1_samples)
 
     # Compute the mean and standard deviation for both detectors as the median
     # of the means / standard deviations for each sample. This is more robust
     # towards outliers than computing "global" parameters by concatenating all
     # samples and treating them as a single, long time series.
-    normalization_parameters = \
-        dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
-             l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
- #            v1_mean=np.median(np.mean(v1_samples, axis=1), axis=0),
-             h1_std=np.median(np.std(h1_samples, axis=1), axis=0),
-             l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
- #            v1_std=np.median(np.std(v1_samples, axis=1), axis=0))
     
+    if detectors_set == {'H1'}:
+        normalization_parameters = \
+        dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
+            h1_std=np.median(np.std(h1_samples, axis=1), axis=0))
+
+    elif detectors_set == {'L1'}:
+        normalization_parameters = \
+        dict(l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
+            l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
+    
+    elif detectors_set == {'H1', 'L1'}:
+        normalization_parameters = \
+            dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
+                l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
+                h1_std=np.median(np.std(h1_samples, axis=1), axis=0),
+                l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
+
     print('Done!\n')
 
     # -------------------------------------------------------------------------
@@ -541,17 +582,51 @@ if __name__ == '__main__':
 
     # Collect and add samples (with and without injection)
     for sample_type in ('injection_samples', 'noise_samples'):
-        for key in ('event_time', 'h1_strain', 'l1_strain'):
-            if samples[sample_type]:
-                value = np.array([_[key] for _ in list(samples[sample_type])])
+        
+        if detectors_set == {'H1'}:
+            
+            for key in ('event_time', 'h1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
                         
-            else:
-                value = None
-            sample_file_dict[sample_type][key] = value
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
+            
+        elif detectors_set == {'L1'}:
+            for key in ('event_time', 'l1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
+                        
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
+        
+        elif detectors_set == {'H1', 'L1'}:
+            for key in ('event_time', 'h1_strain', 'l1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
+                        
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
 
     # Collect and add injection_parameters (ignore noise samples here, because
     # for those, the injection_parameters are always None)
-    other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+    
+    if detectors_set == {'H1'}:
+#        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+    
+    elif detectors_set == {'L1'}:
+#        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+    
+    elif detectors_set == {'H1', 'L1'}:
+#        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+        other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+    
+#    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
             value = np.array([_[key] for _ in
@@ -576,7 +651,19 @@ if __name__ == '__main__':
             value = None
         sample_file_dict['injection_parameters'][key] = value
         
-    noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened']    
+    if detectors_set == {'H1'}:
+#        noise_keys = ['h1_signal', 'h1_signal_whitened']
+        noise_keys = ['h1_signal']
+        
+    elif detectors_set == {'L1'}:
+#        noise_keys = ['l1_signal', 'l1_signal_whitened']
+        noise_keys = ['l1_signal']
+    
+    elif detectors_set == {'H1', 'L1'}:
+#        noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened'] 
+        noise_keys = ['h1_signal', 'l1_signal']    
+    
+#    noise_keys = ['h1_signal', 'l1_signal']    
     for key in list(noise_keys):
         if injection_parameters['noise_samples']:
             value = np.array([_[key] for _ in injection_parameters['noise_samples']])
