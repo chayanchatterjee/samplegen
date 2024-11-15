@@ -616,15 +616,18 @@ if __name__ == '__main__':
     
     if detectors_set == {'H1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
-        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+#        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
     
     elif detectors_set == {'L1'}:
 #        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
-        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+#        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
     
     elif detectors_set == {'H1', 'L1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
-        other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+#        other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
     
 #    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
     for key in list(variable_arguments + other_keys):
@@ -653,15 +656,18 @@ if __name__ == '__main__':
         
     if detectors_set == {'H1'}:
 #        noise_keys = ['h1_signal', 'h1_signal_whitened']
-        noise_keys = ['h1_signal']
+#        noise_keys = ['h1_signal']
+        noise_keys = ['h1_signal_whitened']
         
     elif detectors_set == {'L1'}:
 #        noise_keys = ['l1_signal', 'l1_signal_whitened']
-        noise_keys = ['l1_signal']
+#        noise_keys = ['l1_signal']
+        noise_keys = ['l1_signal_whitened']
     
     elif detectors_set == {'H1', 'L1'}:
 #        noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened'] 
-        noise_keys = ['h1_signal', 'l1_signal']    
+#        noise_keys = ['h1_signal', 'l1_signal']   
+        noise_keys = ['h1_signal_whitened', 'l1_signal_whitened']   
     
 #    noise_keys = ['h1_signal', 'l1_signal']    
     for key in list(noise_keys):

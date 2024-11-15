@@ -339,7 +339,7 @@ def generate_sample(static_arguments,
                                               detector_signals[det])          # Change for SNR Variable
             
 
-#            whitened_waveforms[det] = ((scale_factor * detector_signals[det]).to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()       
+            whitened_waveforms[det] = ((scale_factor * detector_signals[det]).to_frequencyseries() / psds_noise[det]**0.5).to_timeseries()       
             
 #        print(strain['L1'].numpy())
         # ---------------------------------------------------------------------
@@ -465,21 +465,21 @@ def generate_sample(static_arguments,
         if waveform_params is not None:
 
             # Cut the detector signals to the specified length
-            detector_signals[det] = detector_signals[det].time_slice(a, b)
-#            whitened_waveforms[det] = whitened_waveforms[det].time_slice(a, b)
+#            detector_signals[det] = detector_signals[det].time_slice(a, b)
+            whitened_waveforms[det] = whitened_waveforms[det].time_slice(a, b)
 
             if set(detector) == {'H1', 'L1'}:
                 # Also add the detector signals to the injection parameters
-                injection_parameters['h1_signal'] = \
-                    np.array(detector_signals['H1'])
-                injection_parameters['l1_signal'] = \
-                    np.array(detector_signals['L1'])
+        #        injection_parameters['h1_signal'] = \
+        #            np.array(detector_signals['H1'])
+        #        injection_parameters['l1_signal'] = \
+        #            np.array(detector_signals['L1'])
         #       injection_parameters['v1_signal'] = \
         #           np.array(detector_signals['V1'])
-        #        injection_parameters['h1_signal_whitened'] = \
-        #            np.array(whitened_waveforms['H1'])
-        #        injection_parameters['l1_signal_whitened'] = \
-        #            np.array(whitened_waveforms['L1'])
+                injection_parameters['h1_signal_whitened'] = \
+                    np.array(whitened_waveforms['H1'])
+                injection_parameters['l1_signal_whitened'] = \
+                    np.array(whitened_waveforms['L1'])
         #        injection_parameters['v1_signal_whitened'] = \
         #            np.array(whitened_waveforms['V1'])
     
@@ -491,18 +491,18 @@ def generate_sample(static_arguments,
         #            np.array(psds_noise['V1'])
         
             elif detector == ['H1']:
-                injection_parameters['h1_signal'] = \
-                    np.array(detector_signals['H1'])
-        #        injection_parameters['h1_signal_whitened'] = \
-        #            np.array(whitened_waveforms['H1'])    
+        #        injection_parameters['h1_signal'] = \
+        #            np.array(detector_signals['H1'])
+                injection_parameters['h1_signal_whitened'] = \
+                    np.array(whitened_waveforms['H1'])    
                 injection_parameters['psd_noise_h1'] = \
                     np.array(psds_noise['H1'])
                     
             elif detector == ['L1']:
-                injection_parameters['l1_signal'] = \
-                    np.array(detector_signals['L1'])
-        #        injection_parameters['l1_signal_whitened'] = \
-        #            np.array(whitened_waveforms['H1'])    
+        #        injection_parameters['l1_signal'] = \
+        #            np.array(detector_signals['L1'])
+                injection_parameters['l1_signal_whitened'] = \
+                    np.array(whitened_waveforms['H1'])    
                 injection_parameters['psd_noise_l1'] = \
                     np.array(psds_noise['L1'])
 
@@ -510,31 +510,31 @@ def generate_sample(static_arguments,
         elif waveform_params is None:
 
             if set(detector) == {'H1', 'L1'}:
-                injection_parameters['h1_signal'] = \
-                    np.array(detector_signals['H1'])
-                injection_parameters['l1_signal'] = \
-                    np.array(detector_signals['L1'])
+            #    injection_parameters['h1_signal'] = \
+            #        np.array(detector_signals['H1'])
+            #    injection_parameters['l1_signal'] = \
+            #        np.array(detector_signals['L1'])
             #    injection_parameters['v1_signal'] = \
             #        np.array(detector_signals['V1'])
 
-            #    injection_parameters['h1_signal_whitened'] = \
-            #        np.array(detector_signals['H1'])
-            #    injection_parameters['l1_signal_whitened'] = \
-            #        np.array(detector_signals['L1'])
+                injection_parameters['h1_signal_whitened'] = \
+                    np.array(detector_signals['H1'])
+                injection_parameters['l1_signal_whitened'] = \
+                    np.array(detector_signals['L1'])
                     
             elif detector == ['H1']:
-                injection_parameters['h1_signal'] = \
-                    np.array(detector_signals['H1'])
-
-            #    injection_parameters['h1_signal_whitened'] = \
+            #    injection_parameters['h1_signal'] = \
             #        np.array(detector_signals['H1'])
+
+                injection_parameters['h1_signal_whitened'] = \
+                    np.array(detector_signals['H1'])
             
             elif detector == ['L1']:
-                injection_parameters['l1_signal'] = \
-                    np.array(detector_signals['L1'])
-
-            #    injection_parameters['l1_signal_whitened'] = \
+            #    injection_parameters['l1_signal'] = \
             #        np.array(detector_signals['L1'])
+
+                injection_parameters['l1_signal_whitened'] = \
+                    np.array(detector_signals['L1'])
                     
         
         #    injection_parameters['v1_signal_whitened'] = \
