@@ -437,7 +437,7 @@ def generate_sample(static_arguments,
         end_index = int(total_length*target_sampling_rate)
         strain[det] = strain[det][0:end_index]
         
-#        print(strain[det])
+#        print(strain[det].numpy())
 
         
         if add_glitches is not None:
@@ -502,9 +502,11 @@ def generate_sample(static_arguments,
         #        injection_parameters['l1_signal'] = \
         #            np.array(detector_signals['L1'])
                 injection_parameters['l1_signal_whitened'] = \
-                    np.array(whitened_waveforms['H1'])    
+                    np.array(whitened_waveforms['L1'])    
                 injection_parameters['psd_noise_l1'] = \
                     np.array(psds_noise['L1'])
+                    
+#                print(strain['L1'].numpy())
 
             
         elif waveform_params is None:
@@ -555,8 +557,6 @@ def generate_sample(static_arguments,
     # it as a 32-bit float (unlike the original signal, which is down to
     # O(10^-{30}) and thus requires 64-bit floats).
     
-#    print(strain['L1'].numpy())
-    
     if set(detector) == {'H1', 'L1'}:
         sample = {'event_time': event_time,
                 'h1_strain': np.array(strain['H1']).astype(np.float32),
@@ -565,16 +565,19 @@ def generate_sample(static_arguments,
 #              'h1_strain_with_glitch': np.array(strain_with_glitch['H1']).astype(np.float32),
 #              'l1_strain_with_glitch': np.array(strain_with_glitch['L1']).astype(np.float32)}
 #             'v1_strain': np.array(strain['V1']).astype(np.float32)}
+        
+        return sample, injection_parameters
 
     elif detector == ['L1']:
+#        print(strain['L1'].numpy())
         sample = {'event_time': event_time,
                 'l1_strain': np.array(strain['L1']).astype(np.float32)}
-#        print(strain['L1'].shape)
+
+        return sample, injection_parameters
         
     elif detector == ['H1']:
         sample = {'event_time': event_time,
                 'h1_strain': np.array(strain['H1']).astype(np.float32)}
         
-    return sample, injection_parameters
-
+        return sample, injection_parameters
 

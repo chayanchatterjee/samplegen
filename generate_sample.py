@@ -686,6 +686,7 @@ if __name__ == '__main__':
     sample_file_path = os.path.join(output_dir, config['output_file_name'])
 
     # Create the SampleFile object and save it to the specified output file
+#    print(sample_file_dict)
     sample_file = SampleFile(data=sample_file_dict)
     sample_file.to_hdf(file_path=sample_file_path)
 
@@ -709,4 +710,3 @@ if __name__ == '__main__':
     # Print the total run time
     print('Total runtime: {:.1f} seconds!'.format(time.time() - script_start))
     print('')
-
