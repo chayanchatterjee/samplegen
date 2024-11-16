@@ -120,8 +120,12 @@ if __name__ == '__main__':
                     default=['H1', 'L1'])
 
 
-    parser.add_argument('--add-glitches', type=str,
-                        help='What type of glitch to add',
+    parser.add_argument('--add-glitches-noise', type=str,
+                        help='What type of glitch to add in pure noise',
+                        default=None)
+    
+    parser.add_argument('--add-glitches-injection', type=str,
+                        help='What type of glitch to add in injection',
                         default=None)
 
     # Parse the arguments that were passed when calling this script
@@ -135,10 +139,13 @@ if __name__ == '__main__':
     detectors_set = set(detectors)  # Convert to set for easy membership testing
 
     # Asking for additional input if --add-glitches is True
-    if command_line_arguments['add_glitches'] is not None:
-#        glitch_name = input("Enter the name of the glitch to add: ")
-        # Now you can use `glitch_name` as the name of the glitch
-        print(f"Glitch to add: {command_line_arguments['add_glitches']}")
+    if command_line_arguments['add_glitches_noise'] is not None:
+        
+        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_noise']}")
+        
+    if command_line_arguments['add_glitches_injection'] is not None:
+        
+        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_injection']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
@@ -314,7 +321,8 @@ if __name__ == '__main__':
         # Return all necessary arguments as a dictionary
         return dict(static_arguments=static_arguments,
                         event_tuple=next(noise_times),
-                        add_glitches=command_line_arguments['add_glitches'],
+                        add_glitches_noise=command_line_arguments['add_glitches_noise'],
+                        add_glitches_injection=command_line_arguments['add_glitches_injection'],
 #                       glitch_name=glitch_name,
                         detector=command_line_arguments['detectors'],
                         waveform_params=waveform_params)
@@ -381,7 +389,8 @@ if __name__ == '__main__':
                 new_args = {
                     'static_arguments': prev_arguments_generator['static_arguments'],
                     'event_tuple': next(noise_times),  # Fetch a new noise realization
-                    'add_glitches': command_line_arguments['add_glitches'],  # Add glitches parameter
+                    'add_glitches_noise': command_line_arguments['add_glitches_noise'],  # Add glitches parameter
+                    'add_glitches_injection': command_line_arguments['add_glitches_injection'],  # Add glitches parameter
                     'detector': command_line_arguments['detectors'],  # Add detectors parameter
                     'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
                 }
