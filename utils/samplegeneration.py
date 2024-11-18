@@ -449,24 +449,24 @@ def generate_sample(static_arguments,
             
             if add_glitches_injection is not None:
                 glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1.hdf5'
-            try:
-                with h5py.File(glitch_file_path, 'r') as f1:
-                    glitch_strain_data = f1['Strain'][()]
-                    random_id = random.randint(0, len(glitch_strain_data)-1)
-                    glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
+                try:
+                    with h5py.File(glitch_file_path, 'r') as f1:
+                        glitch_strain_data = f1['Strain'][()]
+                        random_id = random.randint(0, len(glitch_strain_data)-1)
+                        glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
                 
-                    # Ensure lengths match
-                    if len(strain[det]) != len(glitch_strain):
-                        glitch_strain = glitch_strain[:len(strain[det])]
+                        # Ensure lengths match
+                        if len(strain[det]) != len(glitch_strain):
+                            glitch_strain = glitch_strain[:len(strain[det])]
                     
-                    # Set the epoch of glitch_strain to match strain[det]
-                    glitch_strain._epoch = whitened_waveforms[det]._epoch
+                        # Set the epoch of glitch_strain to match strain[det]
+                        glitch_strain._epoch = whitened_waveforms[det]._epoch
                 
-                    # Perform addition
-                    strain[det] = glitch_strain + whitened_waveforms[det]
+                        # Perform addition
+                        strain[det] = glitch_strain + whitened_waveforms[det]
 
-            except Exception as e:
-                print(f"Error occurred: {e}")
+                except Exception as e:
+                    print(f"Error occurred: {e}")
 
             if set(detector) == {'H1', 'L1'}:
                 # Also add the detector signals to the injection parameters
@@ -513,24 +513,24 @@ def generate_sample(static_arguments,
             
             if add_glitches_noise is not None:
                 glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_noise +'_whitened_1.hdf5'
-            try:
-                with h5py.File(glitch_file_path, 'r') as f1:
-                    glitch_strain_data = f1['Strain'][()]
-                    random_id = random.randint(0, len(glitch_strain_data)-1)
-                    glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
+                try:
+                    with h5py.File(glitch_file_path, 'r') as f1:
+                        glitch_strain_data = f1['Strain'][()]
+                        random_id = random.randint(0, len(glitch_strain_data)-1)
+                        glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
                 
-                    # Ensure lengths match
-                    if len(strain[det]) != len(glitch_strain):
-                        glitch_strain = glitch_strain[:len(strain[det])]
+                        # Ensure lengths match
+                        if len(strain[det]) != len(glitch_strain):
+                            glitch_strain = glitch_strain[:len(strain[det])]
                     
-                    # Set the epoch of glitch_strain to match strain[det]
-                    glitch_strain._epoch = strain[det]._epoch
+                        # Set the epoch of glitch_strain to match strain[det]
+                        glitch_strain._epoch = strain[det]._epoch
                 
-                    # Perform addition
-                    strain[det] = glitch_strain
+                        # Perform addition
+                        strain[det] = glitch_strain
 
-            except Exception as e:
-                print(f"Error occurred: {e}")
+                except Exception as e:
+                    print(f"Error occurred: {e}")
             
 
             if set(detector) == {'H1', 'L1'}:
