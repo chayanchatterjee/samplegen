@@ -145,7 +145,7 @@ if __name__ == '__main__':
         
     if command_line_arguments['add_glitches_injection'] is not None:
         
-        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_injection']}")
+        print(f"Glitch to add in injection: {command_line_arguments['add_glitches_injection']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 

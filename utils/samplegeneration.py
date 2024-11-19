@@ -33,6 +33,13 @@ import random
 # FUNCTION DEFINITIONS
 # -----------------------------------------------------------------------------
 
+# Define the list of glitches
+glitch_types = ['blip', 'low_freq_burst', 'whistle', 'koi_fish', 'scattered_light', 'repeating_blips']
+
+# Function to pick a random glitch
+def get_random_glitch_type():
+    return random.choice(glitch_types)
+
 def generate_sample(static_arguments,
                     event_tuple,
                     add_glitches_noise,
@@ -448,6 +455,10 @@ def generate_sample(static_arguments,
             whitened_waveforms[det] = whitened_waveforms[det].time_slice(a, b)
             
             if add_glitches_injection is not None:
+                
+                if add_glitches_injection == 'random':
+                    add_glitches_injection = get_random_glitch_type()
+                
                 glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1.hdf5'
                 try:
                     with h5py.File(glitch_file_path, 'r') as f1:
@@ -512,6 +523,10 @@ def generate_sample(static_arguments,
         elif waveform_params is None:
             
             if add_glitches_noise is not None:
+                
+                if add_glitches_noise == 'random':
+                    add_glitches_noise = get_random_glitch_type()
+                
                 glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_noise +'_whitened_1.hdf5'
                 try:
                     with h5py.File(glitch_file_path, 'r') as f1:

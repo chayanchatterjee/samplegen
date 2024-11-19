@@ -428,14 +428,14 @@ def get_detector_signals(static_arguments,
                 det.antenna_pattern(right_ascension=right_ascension,
                                         declination=declination,
                                         polarization=polarization,
-                                        t_gps=1126259462.4)
+                                        t_gps=1187008882.4)
 
             # Calculate the time offset from H1 for this detector
             delta_t_h1 = \
                 det.time_delay_from_detector(other_detector=detectors['H1'],
                                                 right_ascension=right_ascension,
                                                 declination=declination,
-                                                t_gps=1126259462.4)
+                                                t_gps=1187008882.4)
             # Project the waveform onto the antenna pattern
             detector_signal = f_plus * h_plus + f_cross * h_cross
 
