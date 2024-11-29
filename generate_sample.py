@@ -119,7 +119,6 @@ if __name__ == '__main__':
                     nargs='+',  # allows multiple arguments as a list
                     default=['H1', 'L1'])
 
-
     parser.add_argument('--add-glitches-noise', type=str,
                         help='What type of glitch to add in pure noise',
                         default=None)
@@ -127,6 +126,10 @@ if __name__ == '__main__':
     parser.add_argument('--add-glitches-injection', type=str,
                         help='What type of glitch to add in injection',
                         default=None)
+    
+    parser.add_argument('--n-injections-per-glitch', type=int,
+                        help='How many injections per glitch?',
+                        default=1)
 
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
@@ -323,6 +326,7 @@ if __name__ == '__main__':
                         event_tuple=next(noise_times),
                         add_glitches_noise=command_line_arguments['add_glitches_noise'],
                         add_glitches_injection=command_line_arguments['add_glitches_injection'],
+                        n_injections_per_glitch=command_line_arguments['n_injections_per_glitch'],
 #                       glitch_name=glitch_name,
                         detector=command_line_arguments['detectors'],
                         waveform_params=waveform_params)
@@ -626,17 +630,17 @@ if __name__ == '__main__':
     if detectors_set == {'H1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
 #        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
-        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1', 'random_glitch_id_h1']
     
     elif detectors_set == {'L1'}:
 #        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
 #        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
-        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1', 'random_glitch_id_l1']
     
     elif detectors_set == {'H1', 'L1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
 #        other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
-        other_keys = ['h1_signal_whitened', 'h1_snr', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1', 'random_glitch_id_h1', 'random_glitch_id_l1']
     
 #    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
     for key in list(variable_arguments + other_keys):

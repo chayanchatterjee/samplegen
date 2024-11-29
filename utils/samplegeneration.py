@@ -40,10 +40,43 @@ glitch_types = ['blip', 'low_freq_burst', 'whistle', 'koi_fish', 'scattered_ligh
 def get_random_glitch_type():
     return random.choice(glitch_types)
 
+
+# Initialize variables to manage glitch reuse
+current_random_id = None
+current_glitch_strain = None
+injection_counter = 0
+
+def get_glitch_for_injection(glitch_strain_data, n_injections_per_glitch, strain, det, whitened_waveforms):
+    """
+    Dynamically selects and returns the appropriate glitch for the current injection.
+    Reuses the same glitch for `n_injections_per_glitch` injections.
+    """
+    global current_random_id, current_glitch_strain, injection_counter
+
+    # Select a new glitch every `n_injections_per_glitch` injections
+    if injection_counter % n_injections_per_glitch == 0:
+        current_random_id = random.randint(0, len(glitch_strain_data) - 1)
+        current_glitch_strain = TimeSeries(glitch_strain_data[current_random_id], delta_t=strain[det].delta_t)
+
+        # Ensure lengths match
+        if len(strain[det]) != len(current_glitch_strain):
+            current_glitch_strain = current_glitch_strain[:len(strain[det])]
+
+        # Set the epoch of the glitch strain to match strain[det]
+        current_glitch_strain._epoch = whitened_waveforms[det]._epoch
+
+    # Increment the counter for each injection
+    injection_counter += 1
+
+    # Return the current glitch strain
+    return current_glitch_strain, current_random_id
+
+
 def generate_sample(static_arguments,
                     event_tuple,
                     add_glitches_noise,
                     add_glitches_injection,
+                    n_injections_per_glitch,
                     detector,
                     waveform_params=None):
     """
@@ -452,32 +485,59 @@ def generate_sample(static_arguments,
 
             # Cut the detector signals to the specified length
 #            detector_signals[det] = detector_signals[det].time_slice(a, b)
+            random_glitch_id = {}
             whitened_waveforms[det] = whitened_waveforms[det].time_slice(a, b)
-            
+                        
+            # Main conditional block
             if add_glitches_injection is not None:
-                
+
                 if add_glitches_injection == 'random':
                     add_glitches_injection = get_random_glitch_type()
-                
-                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1.hdf5'
+                    
+#                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1.hdf5'
+                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_' + add_glitches_injection + '_whitened_1_snr-8to20.hdf5'
+
                 try:
                     with h5py.File(glitch_file_path, 'r') as f1:
                         glitch_strain_data = f1['Strain'][()]
-                        random_id = random.randint(0, len(glitch_strain_data)-1)
-                        glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
-                
-                        # Ensure lengths match
-                        if len(strain[det]) != len(glitch_strain):
-                            glitch_strain = glitch_strain[:len(strain[det])]
-                    
-                        # Set the epoch of glitch_strain to match strain[det]
-                        glitch_strain._epoch = whitened_waveforms[det]._epoch
-                
+
+                        # Dynamically call the helper function to get the glitch
+                        glitch_strain, random_id = get_glitch_for_injection(glitch_strain_data, n_injections_per_glitch, strain, det, whitened_waveforms)
+
+                        random_glitch_id[det] = random_id
                         # Perform addition
                         strain[det] = glitch_strain + whitened_waveforms[det]
 
                 except Exception as e:
                     print(f"Error occurred: {e}")
+
+            
+            
+#            if add_glitches_injection is not None:
+                
+#                if add_glitches_injection == 'random':
+#                    add_glitches_injection = get_random_glitch_type()
+                
+##                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1.hdf5'
+#                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_injection +'_whitened_1_snr-8to20.hdf5'
+#                try:
+#                    with h5py.File(glitch_file_path, 'r') as f1:
+#                        glitch_strain_data = f1['Strain'][()]
+#                        random_id = random.randint(0, len(glitch_strain_data)-1)
+#                        glitch_strain = TimeSeries(glitch_strain_data[random_id], delta_t=strain[det].delta_t)
+                
+#                        # Ensure lengths match
+#                        if len(strain[det]) != len(glitch_strain):
+#                            glitch_strain = glitch_strain[:len(strain[det])]
+                    
+#                        # Set the epoch of glitch_strain to match strain[det]
+#                        glitch_strain._epoch = whitened_waveforms[det]._epoch
+                
+#                        # Perform addition
+#                        strain[det] = glitch_strain + whitened_waveforms[det]
+
+#                except Exception as e:
+#                    print(f"Error occurred: {e}")
 
             if set(detector) == {'H1', 'L1'}:
                 # Also add the detector signals to the injection parameters
@@ -500,6 +560,12 @@ def generate_sample(static_arguments,
                     np.array(psds_noise['L1'])
         #        injection_parameters['psd_noise_v1'] = \
         #            np.array(psds_noise['V1'])
+
+                injection_parameters['random_glitch_id_h1'] = \
+                    np.array(random_glitch_id['H1'])
+                injection_parameters['random_glitch_id_l1'] = \
+                    np.array(random_glitch_id['L1'])
+                
         
             elif detector == ['H1']:
         #        injection_parameters['h1_signal'] = \
@@ -508,6 +574,8 @@ def generate_sample(static_arguments,
                     np.array(whitened_waveforms['H1'])    
                 injection_parameters['psd_noise_h1'] = \
                     np.array(psds_noise['H1'])
+                injection_parameters['random_glitch_id_h1'] = \
+                    np.array(random_glitch_id['H1'])
                     
             elif detector == ['L1']:
         #        injection_parameters['l1_signal'] = \
@@ -516,6 +584,8 @@ def generate_sample(static_arguments,
                     np.array(whitened_waveforms['L1'])    
                 injection_parameters['psd_noise_l1'] = \
                     np.array(psds_noise['L1'])
+                injection_parameters['random_glitch_id_l1'] = \
+                    np.array(random_glitch_id['L1'])
                     
 #                print(strain['L1'].numpy())
 
@@ -527,7 +597,10 @@ def generate_sample(static_arguments,
                 if add_glitches_noise == 'random':
                     add_glitches_noise = get_random_glitch_type()
                 
-                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_noise +'_whitened_1.hdf5'
+#                glitch_file_path = '/workspace/LIGO/samplegen/Glitch_data/combined_strains_snr_'+ add_glitches_noise +'_whitened_1.hdf5'
+                glitch_file_path = '/workspace/LIGO/AWaRe_train/notebooks/Glitch_data/combined_strains_snr_'+ add_glitches_noise +'_whitened_1_snr-8to20.hdf5'
+#                glitch_file_path = '/workspace/ligo_data/Glitch_classification/Strain_data/gspy_blip_H1_processed.hdf5'
+                
                 try:
                     with h5py.File(glitch_file_path, 'r') as f1:
                         glitch_strain_data = f1['Strain'][()]

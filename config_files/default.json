@@ -1,16 +1,16 @@
 {
-  "random_seed": 400,
+  "random_seed": 525,
   "template_random_seed": 10,
   "background_data_directory": null,
   "dq_bits": [0, 1, 2, 3],
   "inj_bits": [0, 1, 2, 4],
   "waveform_params_file_name": "waveform_params.ini",
   "max_runtime": 6000,
-  "n_injection_samples": 3,
-  "n_noise_samples": 3,
+  "n_injection_samples": 500,
+  "n_noise_samples": 0,
   "n_processes": 10,
   "n_template_samples": 0,
-  "output_file_name": "Whisper_one_detector_glitch_test.hdf",
+  "output_file_name": "Overlapping_injection_glitch_test_repeating_blips_n_injections_per_glitch.hdf",
   "snr_output_file_name": "default_snr_series_test_1_sec_10to80_for_cm_1.hdf",
   "template_output_file_name": "default_templates.hdf"
 }
