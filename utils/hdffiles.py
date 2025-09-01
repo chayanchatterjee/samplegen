@@ -222,6 +222,9 @@ class NoiseTimeline:
         self.vprint('Building timeline object...', end=' ')
         self.timeline = self._build_timeline()
         self.vprint('Done!')
+        
+        self.catalog = Catalog()  # download once at init
+        self.real_event_times = [ev.time for ev in self.catalog.mergers.values()]
 
     # -------------------------------------------------------------------------
 
@@ -382,12 +385,15 @@ class NoiseTimeline:
         # Check if given time is too close to a real event
         # ---------------------------------------------------------------------
 
-        # Get GPS times of all confirmed mergers
-        catalog = Catalog()
-        real_event_times = [catalog.mergers[_].time for _ in catalog.names]
+#        # Get GPS times of all confirmed mergers
+#        catalog = Catalog()
+#        real_event_times = [catalog.mergers[_].time for _ in catalog.names]
 
-        # Check if gps_time is too close to any of these times
-        if any(abs(gps_time - _) <= delta_t for _ in real_event_times):
+#        # Check if gps_time is too close to any of these times
+#        if any(abs(gps_time - _) <= delta_t for _ in real_event_times):
+#            return False
+
+        if any(abs(gps_time - _) <= delta_t for _ in self.real_event_times):
             return False
 
         # ---------------------------------------------------------------------
