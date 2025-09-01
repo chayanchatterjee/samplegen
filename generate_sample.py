@@ -18,6 +18,7 @@ import time
 from itertools import count
 from multiprocessing import Process, Queue
 from tqdm import tqdm
+import h5py
 
 from utils.configfiles import read_ini_config, read_json_config
 from utils.hdffiles import NoiseTimeline
@@ -26,6 +27,7 @@ from utils.hdffiles_original import NoiseTimeline_original
 from utils.samplefiles import SampleFile
 from utils.samplegeneration import generate_sample
 from utils.waveforms import WaveformParameterGenerator
+import concurrent.futures
 
 from astropy.utils import iers
 iers.conf.auto_download = False
@@ -60,7 +62,15 @@ def queue_worker(arguments, results_queue):
     except RuntimeError as e:
         print(f"Runtime Error in process: {e}")
     finally:
+#        results_queue.put((index, None))  # Indicate failure or no result
         sys.exit(0)
+        
+        
+def _worker(arg):
+    """Unpack ((index, arguments)) and call generate_sample."""
+    idx, arguments = arg
+    result = generate_sample(**arguments)
+    return idx, result
     
     
 #    try:
@@ -110,20 +120,40 @@ if __name__ == '__main__':
     parser.add_argument('--n-noise-realizations', 
                         help='Number of noise realizations for each template.', type=int,
                         default=1)
+    
+    parser.add_argument('--detectors', 
+                    help='List of detectors to use', 
+                    type=str,
+                    nargs='+',  # allows multiple arguments as a list
+                    default=['H1', 'L1'])
 
-    parser.add_argument('--add-glitches', type=str,
-                        help='What type of glitch to add',
+
+    parser.add_argument('--add-glitches-noise', type=str,
+                        help='What type of glitch to add in pure noise',
+                        default=None)
+    
+    parser.add_argument('--add-glitches-injection', type=str,
+                        help='What type of glitch to add in injection',
                         default=None)
 
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
     command_line_arguments = vars(parser.parse_args())
+    
+    # Access the detectors argument
+    detectors = command_line_arguments['detectors']
+
+    # Perform operations based on detectors
+    detectors_set = set(detectors)  # Convert to set for easy membership testing
 
     # Asking for additional input if --add-glitches is True
-    if command_line_arguments['add_glitches'] is not None:
-#        glitch_name = input("Enter the name of the glitch to add: ")
-        # Now you can use `glitch_name` as the name of the glitch
-        print(f"Glitch to add: {command_line_arguments['add_glitches']}")
+    if command_line_arguments['add_glitches_noise'] is not None:
+        
+        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_noise']}")
+        
+    if command_line_arguments['add_glitches_injection'] is not None:
+        
+        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_injection']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
@@ -299,8 +329,10 @@ if __name__ == '__main__':
         # Return all necessary arguments as a dictionary
         return dict(static_arguments=static_arguments,
                         event_tuple=next(noise_times),
-                        add_glitches=command_line_arguments['add_glitches'],
+                        add_glitches_noise=command_line_arguments['add_glitches_noise'],
+                        add_glitches_injection=command_line_arguments['add_glitches_injection'],
 #                       glitch_name=glitch_name,
+                        detector=command_line_arguments['detectors'],
                         waveform_params=waveform_params)
         
     # -------------------------------------------------------------------------
@@ -331,154 +363,216 @@ if __name__ == '__main__':
             n_samples = config['n_noise_samples']
             arguments_generator = \
                 (generate_arguments(injection=False) for _ in iter(int, 1))
-
-        # ---------------------------------------------------------------------
-        # If we do not need to generate any samples, skip ahead:
-        # ---------------------------------------------------------------------
-
-        if n_samples == 0:
-            print('Done! (n_samples=0)\n')
-            continue
-
-        # ---------------------------------------------------------------------
-        # Initialize queues for the simulation arguments and the results
-        # ---------------------------------------------------------------------
-
-        # Initialize a Queue and fill it with as many arguments as we
-        # want to generate samples
-        arguments_queue = Queue()
-        start = next(arguments_generator)  # Fetch the first set of arguments
-
-        for i in range(n_samples):
-            if i == 0:
-            # Always put the first arguments into the queue
-                arguments_queue.put((i, start))
-                prev_arguments_generator = start  # Save the first arguments to use later
-
-            elif (i % command_line_arguments['n_noise_realizations'] == 0):
-            # Fetch new arguments from the generator every 'n_noise_realizations' steps
-                new_args = next(arguments_generator)
-                arguments_queue.put((i, new_args))
-                prev_arguments_generator = new_args  # Update the previous arguments
-            else:
-            # Generate new arguments with the same waveform_params but a new noise realization
-                new_args = {
-                    'static_arguments': prev_arguments_generator['static_arguments'],
-                    'event_tuple': next(noise_times),  # Fetch a new noise realization
-                    'add_glitches': command_line_arguments['add_glitches'],  # Add glitches parameter
-                    'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
-                }
-        
-                arguments_queue.put((i, new_args))
-                prev_arguments_generator = new_args  # Update the previous arguments to include the new noise realization
-
-        # Initialize a Queue and a list to store the generated samples
-        results_queue = Queue()
-        results_list = []
-
-        # ---------------------------------------------------------------------
-        # Use process-based multiprocessing to generate samples in parallel
-        # ---------------------------------------------------------------------
-
-        # Use a tqdm context manager for the progress bar
-        tqdm_args = dict(total=n_samples, ncols=80, unit='sample')
-        with tqdm(**tqdm_args) as progressbar:
-
-            # Keep track of all running processes
-            list_of_processes = []
-
-            # While we haven't produced as many results as desired, keep going
-            while len(results_list) < n_samples:
-    
-                # -------------------------------------------------------------
-                # Loop over processes to see if anything finished or got stuck
-                # -------------------------------------------------------------
                 
-                for process_dict in list_of_processes:
-        
-                    # Get the process object and its current runtime
-                    process = process_dict['process']
-                    runtime = time.time() - process_dict['start_time']
-        
-                    # Check if the process is still running when it should
-                    # have terminated already (according to max_runtime)
-                    if process.is_alive() and (runtime > max_runtime):
-            
-                        # Kill process that's been running too long
-                        process.terminate()
-                        process.join()
-                        list_of_processes.remove(process_dict)
-            
-                        # Add new arguments to queue to replace the failed ones
-                        new_arguments = next(arguments_generator)
-                        arguments_queue.put(new_arguments)
-        
-                    # If process has terminated already
-                    elif not process.is_alive():
-            
-                        # If the process failed, add new arguments to queue
-                        if process.exitcode != 0:
-                            new_arguments = next(arguments_generator)
-                            arguments_queue.put(new_arguments)
-            
-                        # Remove process from the list of running processes
-                        list_of_processes.remove(process_dict)
+                
+#        # build a flat list of (index, arguments) tuples
+#        args_list = []
+#        prev_args = None
+#        for i in range(n_samples):
+#            if i == 0:
+#                args = next(arguments_generator)
+#                prev_args = args
+#            elif (i % command_line_arguments['n_noise_realizations'] == 0):
+#                args = next(arguments_generator)
+#                prev_args = args
+#            else:
+#                # same waveform but new noise time
+#                args = dict(prev_args,
+#                            event_tuple=next(noise_times))
+#                prev_args = args
+#            args_list.append((i, args))
 
-                # -------------------------------------------------------------
-                # Start new processes if necessary
-                # -------------------------------------------------------------
+
+        # ---------------------------------------------------------------------
+        # Use a generator to avoid upfront computation of all noise times
+        # ---------------------------------------------------------------------
+
+        def iter_args():
+            prev_args = None
+            for i in range(n_samples):
+                if i == 0:
+                    args = next(arguments_generator)
+                    prev_args = args
+                elif (i % command_line_arguments['n_noise_realizations'] == 0):
+                    args = next(arguments_generator)
+                    prev_args = args
+                else:
+                    # Reuse waveform params but draw a new noise time
+                    args = dict(prev_args,
+                                event_tuple=next(noise_times))
+                    prev_args = args
+                yield (i, args)
+        
+        
+        results_list = [None] * n_samples
+        
+        
+        
+        # run them in parallel
+        with concurrent.futures.ProcessPoolExecutor(max_workers=config['n_processes']) as executor:
+            # submit all tasks
+#            futures = {executor.submit(_worker, arg): arg[0] for arg in args_list}
+            futures = {executor.submit(_worker, arg): arg[0] for arg in iter_args()}
+            # iterate as they complete, updating progress
+            for future in tqdm(concurrent.futures.as_completed(futures),
+                            total=n_samples, ncols=80, unit='sample'):
+                idx, res = future.result()
+                results_list[idx] = res
+
+        # ---------------------------------------------------------------------
+        # Unpack results exactly as before
+        # ---------------------------------------------------------------------
+        samples[sample_type], injection_parameters[sample_type] = zip(*results_list)
+        print('Sample generation completed!\n')
+        
+        
+        
+#        # ---------------------------------------------------------------------
+#        # If we do not need to generate any samples, skip ahead:
+#        # ---------------------------------------------------------------------
+
+#        if n_samples == 0:
+#            print('Done! (n_samples=0)\n')
+#            continue
+
+#        # ---------------------------------------------------------------------
+#        # Initialize queues for the simulation arguments and the results
+#        # ---------------------------------------------------------------------
+
+#        # Initialize a Queue and fill it with as many arguments as we
+#        # want to generate samples
+#        arguments_queue = Queue()
+#        start = next(arguments_generator)  # Fetch the first set of arguments
+
+#        for i in range(n_samples):
+#            if i == 0:
+#            # Always put the first arguments into the queue
+#                arguments_queue.put((i, start))
+#                prev_arguments_generator = start  # Save the first arguments to use later
+
+#            elif (i % command_line_arguments['n_noise_realizations'] == 0):
+#            # Fetch new arguments from the generator every 'n_noise_realizations' steps
+#               new_args = next(arguments_generator)
+#                arguments_queue.put((i, new_args))
+#                prev_arguments_generator = new_args  # Update the previous arguments
+#            else:
+#            # Generate new arguments with the same waveform_params but a new noise realization
+#                new_args = {
+#                    'static_arguments': prev_arguments_generator['static_arguments'],
+#                    'event_tuple': next(noise_times),  # Fetch a new noise realization
+#                    'add_glitches_noise': command_line_arguments['add_glitches_noise'],  # Add glitches parameter
+#                    'add_glitches_injection': command_line_arguments['add_glitches_injection'],  # Add glitches parameter
+#                    'detector': command_line_arguments['detectors'],  # Add detectors parameter
+#                    'waveform_params': prev_arguments_generator['waveform_params']  # Keep the same waveform_params
+#                }
+        
+#                arguments_queue.put((i, new_args))
+#                prev_arguments_generator = new_args  # Update the previous arguments to include the new noise realization
+
+#        # Initialize a Queue and a list to store the generated samples
+#        results_queue = Queue()
+#        results_list = []
+
+#        # ---------------------------------------------------------------------
+#        # Use process-based multiprocessing to generate samples in parallel
+#        # ---------------------------------------------------------------------
+
+#        # Use a tqdm context manager for the progress bar
+#        tqdm_args = dict(total=n_samples, ncols=80, unit='sample')
+#        with tqdm(**tqdm_args) as progressbar:
+
+#            # Keep track of all running processes
+#            list_of_processes = []
+
+#            # While we haven't produced as many results as desired, keep going
+#            while len(results_list) < n_samples:
     
-                # Start new processes until the arguments_queue is empty, or
-                # we have reached the maximum number of processes
-                while (arguments_queue.qsize() > 0 and
-                       len(list_of_processes) < config['n_processes']):
-                    
-                    # Get arguments from queue and start new process
-                    arguments = arguments_queue.get()
-                    p = Process(target=queue_worker,
-                                kwargs=dict(arguments=arguments,
-                                            results_queue=results_queue))
+#                # -------------------------------------------------------------
+#                # Loop over processes to see if anything finished or got stuck
+#                # -------------------------------------------------------------
+                
+#                for process_dict in list_of_processes:
         
-                    # Remember this process and its starting time
-                    process_dict = dict(process=p, start_time=time.time())
-                    list_of_processes.append(process_dict)
-                    
-                    # Finally, start the process
-                    p.start()
-
-                # -------------------------------------------------------------
-                # Move results from results_queue to results_list
-                # -------------------------------------------------------------
-
-                # Without this part, the results_queue blocks the worker
-                # processes so that they won't terminate
-                while results_queue.qsize() > 0:
-                    results_list.append(results_queue.get())
-
-                # Update the progress bar based on the number of results
-                progressbar.update(len(results_list) - progressbar.n)
-
-                # Sleep for some time before we check the processes again
-                time.sleep(0.5)
+#                    # Get the process object and its current runtime
+#                    process = process_dict['process']
+#                    runtime = time.time() - process_dict['start_time']
+        
+#                    # Check if the process is still running when it should
+#                    # have terminated already (according to max_runtime)
+#                    if process.is_alive() and (runtime > max_runtime):
             
-        # ---------------------------------------------------------------------
-        # Process results in the results_list
-        # ---------------------------------------------------------------------
+#                        # Kill process that's been running too long
+#                        process.terminate()
+#                        process.join()
+#                        list_of_processes.remove(process_dict)
+            
+#                        # Add new arguments to queue to replace the failed ones
+#                        new_arguments = next(arguments_generator)
+#                        arguments_queue.put(new_arguments)
+        
+#                    # If process has terminated already
+#                    elif not process.is_alive():
+            
+#                        # If the process failed, add new arguments to queue
+#                        if process.exitcode != 0:
+#                            new_arguments = next(arguments_generator)
+#                            arguments_queue.put(new_arguments)
+            
+#                        # Remove process from the list of running processes
+#                        list_of_processes.remove(process_dict)
 
-        # Sort results by index and extract just the results
-        results_list.sort(key=lambda x: x[0])  # Sort by the first element of the tuple, the index
-        results_list = [result[1] for result in results_list]  # Extract the second element, the actual result
+#                # -------------------------------------------------------------
+#                # Start new processes if necessary
+#                # -------------------------------------------------------------
+    
+#                # Start new processes until the arguments_queue is empty, or
+#                # we have reached the maximum number of processes
+#                while (arguments_queue.qsize() > 0 and
+#                       len(list_of_processes) < config['n_processes']):
+                    
+#                    # Get arguments from queue and start new process
+#                    arguments = arguments_queue.get()
+#                    p = Process(target=queue_worker,
+#                                kwargs=dict(arguments=arguments,
+#                                            results_queue=results_queue))
+        
+#                    # Remember this process and its starting time
+#                    process_dict = dict(process=p, start_time=time.time())
+#                    list_of_processes.append(process_dict)
+                    
+#                    # Finally, start the process
+#                    p.start()
 
-        # Separate the samples and the injection parameters
-        samples[sample_type], injection_parameters[sample_type] = \
-            zip(*results_list)
+#                # -------------------------------------------------------------
+#                # Move results from results_queue to results_list
+#                # -------------------------------------------------------------
 
-        # Sort all results by the event_time
-#        idx = np.argsort([_['event_time'] for _ in list(samples[sample_type])])
-#        samples[sample_type] = \
-#            list([samples[sample_type][i] for i in idx])
-#        injection_parameters[sample_type] = \
-#            list([injection_parameters[sample_type][i] for i in idx])
+#                # Without this part, the results_queue blocks the worker
+#                # processes so that they won't terminate
+#                while results_queue.qsize() > 0:
+#                    results_list.append(results_queue.get())
+
+#                # Update the progress bar based on the number of results
+#                progressbar.update(len(results_list) - progressbar.n)
+
+#                # Sleep for some time before we check the processes again
+#                time.sleep(0.5)
+            
+#        # ---------------------------------------------------------------------
+#        # Process results in the results_list
+#        # ---------------------------------------------------------------------
+
+#        # Sort results by index and extract just the results
+#        results_list.sort(key=lambda x: x[0])  # Sort by the first element of the tuple, the index
+        
+##        print(results_list)
+        
+#        results_list = [result[1] for result in results_list]  # Extract the second element, the actual result
+
+#        # Separate the samples and the injection parameters
+#        samples[sample_type], injection_parameters[sample_type] = \
+#            zip(*results_list)
+
 
         print('Sample generation completed!\n')
 
@@ -489,12 +583,23 @@ if __name__ == '__main__':
     print('Computing normalization parameters for sample...', end=' ')
 
     # Gather all samples (with and without injection) in one list
-    all_samples = list(samples['injection_samples'] + samples['noise_samples'])
+    all_samples = list(samples['injection_samples']) + list(samples['noise_samples'])
 
     # Group all samples by detector
-    h1_samples = [_['h1_strain'] for _ in all_samples]
-    l1_samples = [_['l1_strain'] for _ in all_samples]
- #   v1_samples = [_['v1_strain'] for _ in all_samples]
+    if detectors_set == {'H1'}:
+        h1_samples = [_['h1_strain'] for _ in all_samples]
+        h1_samples = np.vstack(h1_samples)
+    elif detectors_set == {'L1'}:
+        l1_samples = [_['l1_strain'] for _ in all_samples]
+        l1_samples = np.vstack(l1_samples)
+    elif detectors_set == {'H1', 'L1'}:
+        h1_samples = [_['h1_strain'] for _ in all_samples]
+        l1_samples = [_['l1_strain'] for _ in all_samples]
+        
+        h1_samples = np.vstack(h1_samples)
+        l1_samples = np.vstack(l1_samples)
+        
+#   v1_samples = [_['v1_strain'] for _ in all_samples]
 
     # Stack recordings along first axis
 
@@ -506,22 +611,32 @@ if __name__ == '__main__':
 #    l1_samples = [row[0:2048] for row in l1_samples]
 #    v1_samples = [row[0:2048] for row in v1_samples]
 
-    h1_samples = np.vstack(h1_samples)
-    l1_samples = np.vstack(l1_samples)
- #   v1_samples = np.vstack(v1_samples)
+    
+    
+#   v1_samples = np.vstack(v1_samples)
 
     # Compute the mean and standard deviation for both detectors as the median
     # of the means / standard deviations for each sample. This is more robust
     # towards outliers than computing "global" parameters by concatenating all
     # samples and treating them as a single, long time series.
-    normalization_parameters = \
-        dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
-             l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
- #            v1_mean=np.median(np.mean(v1_samples, axis=1), axis=0),
-             h1_std=np.median(np.std(h1_samples, axis=1), axis=0),
-             l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
- #            v1_std=np.median(np.std(v1_samples, axis=1), axis=0))
     
+    if detectors_set == {'H1'}:
+        normalization_parameters = \
+        dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
+            h1_std=np.median(np.std(h1_samples, axis=1), axis=0))
+
+    elif detectors_set == {'L1'}:
+        normalization_parameters = \
+        dict(l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
+            l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
+    
+    elif detectors_set == {'H1', 'L1'}:
+        normalization_parameters = \
+            dict(h1_mean=np.median(np.mean(h1_samples, axis=1), axis=0),
+                l1_mean=np.median(np.mean(l1_samples, axis=1), axis=0),
+                h1_std=np.median(np.std(h1_samples, axis=1), axis=0),
+                l1_std=np.median(np.std(l1_samples, axis=1), axis=0))
+
     print('Done!\n')
 
     # -------------------------------------------------------------------------
@@ -541,17 +656,55 @@ if __name__ == '__main__':
 
     # Collect and add samples (with and without injection)
     for sample_type in ('injection_samples', 'noise_samples'):
-        for key in ('event_time', 'h1_strain', 'l1_strain'):
-            if samples[sample_type]:
-                value = np.array([_[key] for _ in list(samples[sample_type])])
+        
+        if detectors_set == {'H1'}:
+            
+            for key in ('event_time', 'h1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
                         
-            else:
-                value = None
-            sample_file_dict[sample_type][key] = value
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
+            
+        elif detectors_set == {'L1'}:
+            for key in ('event_time', 'l1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
+                        
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
+        
+        elif detectors_set == {'H1', 'L1'}:
+            for key in ('event_time', 'h1_strain', 'l1_strain'):
+                if samples[sample_type]:
+                    value = np.array([_[key] for _ in list(samples[sample_type])])
+                        
+                else:
+                    value = None
+                sample_file_dict[sample_type][key] = value
 
     # Collect and add injection_parameters (ignore noise samples here, because
     # for those, the injection_parameters are always None)
-    other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+    
+    if detectors_set == {'H1'}:
+#        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+#        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+    
+    elif detectors_set == {'L1'}:
+#        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+#        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+    
+    elif detectors_set == {'H1', 'L1'}:
+#        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+#        other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'l1_signal_whitened', 'l1_snr', 'scale_factor']
+#        other_keys = ['h1_snr', 'l1_snr', 'scale_factor']
+    
+#    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
             value = np.array([_[key] for _ in
@@ -576,7 +729,22 @@ if __name__ == '__main__':
             value = None
         sample_file_dict['injection_parameters'][key] = value
         
-    noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened']    
+    if detectors_set == {'H1'}:
+#        noise_keys = ['h1_signal', 'h1_signal_whitened']
+#        noise_keys = ['h1_signal']
+        noise_keys = ['h1_signal_whitened']
+        
+    elif detectors_set == {'L1'}:
+#        noise_keys = ['l1_signal', 'l1_signal_whitened']
+        noise_keys = ['l1_signal_whitened']
+#        noise_keys = ['l1_signal_whitened']
+    
+    elif detectors_set == {'H1', 'L1'}:
+#        noise_keys = ['h1_signal', 'h1_signal_whitened', 'l1_signal', 'l1_signal_whitened'] 
+#        noise_keys = ['h1_signal', 'l1_signal']   
+        noise_keys = ['h1_signal_whitened', 'l1_signal_whitened']   
+    
+#    noise_keys = ['h1_signal', 'l1_signal']    
     for key in list(noise_keys):
         if injection_parameters['noise_samples']:
             value = np.array([_[key] for _ in injection_parameters['noise_samples']])
@@ -593,6 +761,7 @@ if __name__ == '__main__':
     sample_file_path = os.path.join(output_dir, config['output_file_name'])
 
     # Create the SampleFile object and save it to the specified output file
+#    print(sample_file_dict)
     sample_file = SampleFile(data=sample_file_dict)
     sample_file.to_hdf(file_path=sample_file_path)
 
@@ -616,4 +785,3 @@ if __name__ == '__main__':
     # Print the total run time
     print('Total runtime: {:.1f} seconds!'.format(time.time() - script_start))
     print('')
-
