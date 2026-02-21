@@ -35,66 +35,76 @@ from astropy.utils import iers
 iers.conf.auto_download = False
 
 
-def _extract_mode_deviation_flags(unknown_arguments, prefix):
-    """Extract `--{prefix}-<mode> <value>` options from unknown CLI args."""
+def _parse_mode_keys(raw_modes, prefix):
+    """Parse mode labels from argparse (e.g. "22" or "2,2")."""
 
-    pattern = re.compile(r'^--{}-(\d+)(?:[,_-](\d+))?$'.format(prefix))
-    parsed_values = {}
-    remaining = []
-    index = 0
-
-    while index < len(unknown_arguments):
-        option = unknown_arguments[index]
-        match = pattern.match(option)
-        if match is None:
-            remaining.append(option)
-            index += 1
-            continue
-
-        if index + 1 >= len(unknown_arguments):
-            raise ValueError('Expected a value after {}.'.format(option))
-
-        raw_l = match.group(1)
-        raw_m = match.group(2)
-        if raw_m is None:
-            if len(raw_l) < 2:
-                raise ValueError(
-                    'Mode {} in {} is ambiguous. Use --{}-l,m format '
-                    '(example: --{}-6,6 0.1).'.format(raw_l, option,
-                                                      prefix, prefix)
-                )
-            mode_l = raw_l[:-1]
-            mode_m = raw_l[-1]
+    mode_keys = []
+    for raw_mode in raw_modes:
+        normalized = raw_mode.replace('_', ',').replace('-', ',')
+        if ',' in normalized:
+            parts = normalized.split(',')
+            if len(parts) != 2:
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l, mode_m = parts
         else:
-            mode_l = raw_l
-            mode_m = raw_m
+            if len(normalized) < 2 or not normalized.isdigit():
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l = normalized[:-1]
+            mode_m = normalized[-1]
 
-        try:
-            value = float(unknown_arguments[index + 1])
-        except ValueError:
-            raise ValueError('Invalid numeric value for {}.'.format(option))
+        mode_keys.append('{},{}'.format(int(mode_l), int(mode_m)))
 
-        parsed_values['{},{}'.format(int(mode_l), int(mode_m))] = value
-        index += 2
-
-    return parsed_values, remaining
+    return mode_keys
 
 
-def _build_mode_deviation_dict(arguments, unknown_arguments, prefix):
-    """Build a pyseobnr mode deviation dictionary from CLI arguments."""
+def _parse_deviation_range(static_arguments, prefix):
+    """Read a deviation range from static args.
 
-    default_modes = ('22', '33', '21', '32', '44', '43', '55')
-    result = {}
-    for mode in default_modes:
-        argument_name = '{}_{}'.format(prefix, mode)
-        result['{},{}'.format(mode[0], mode[1])] = arguments[argument_name]
+    Supported INI keys in [static_args]:
+      * {prefix}_range = <min>,<max>
+      * {prefix}_range_min = <min>
+        {prefix}_range_max = <max>
+    """
 
-    parsed_dynamic_values, unknown_arguments = _extract_mode_deviation_flags(
-        unknown_arguments,
-        prefix
-    )
-    result.update(parsed_dynamic_values)
-    return result, unknown_arguments
+    min_key = '{}_range_min'.format(prefix)
+    max_key = '{}_range_max'.format(prefix)
+    combined_key = '{}_range'.format(prefix)
+
+    if min_key in static_arguments or max_key in static_arguments:
+        if min_key not in static_arguments or max_key not in static_arguments:
+            raise ValueError('Both {} and {} must be set in [static_args].'.format(
+                min_key,
+                max_key
+            ))
+        min_value = float(static_arguments[min_key])
+        max_value = float(static_arguments[max_key])
+    elif combined_key in static_arguments:
+        raw_value = static_arguments[combined_key]
+        pieces = [piece.strip() for piece in re.split(r'[,:\s]+', raw_value)
+                  if piece.strip()]
+        if len(pieces) != 2:
+            raise ValueError('Expected {} to contain exactly two values.'.format(
+                combined_key
+            ))
+        min_value, max_value = map(float, pieces)
+    else:
+        return None
+
+    if min_value > max_value:
+        raise ValueError('{} must satisfy min <= max.'.format(combined_key))
+
+    return min_value, max_value
+
+
+def _sample_range_value(value_range):
+    """Draw a single value uniformly from the given (min, max) range."""
+
+    if value_range is None:
+        return None
+    min_value, max_value = value_range
+    return np.random.uniform(min_value, max_value)
 
 
 def _parse_mode_keys(raw_modes, prefix):
@@ -311,18 +321,16 @@ if __name__ == '__main__':
 
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
-    parsed_arguments, unknown_arguments = parser.parse_known_args()
+    parsed_arguments = parser.parse_args()
     command_line_arguments = vars(parsed_arguments)
 
     try:
-        domega_dict, unknown_arguments = _build_mode_deviation_dict(
-            command_line_arguments,
-            unknown_arguments,
+        domega_range_modes = _parse_mode_keys(
+            command_line_arguments['domega_range_modes'],
             prefix='domega'
         )
-        dtau_dict, unknown_arguments = _build_mode_deviation_dict(
-            command_line_arguments,
-            unknown_arguments,
+        dtau_range_modes = _parse_mode_keys(
+            command_line_arguments['dtau_range_modes'],
             prefix='dtau'
         )
     except ValueError as error:
