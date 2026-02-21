@@ -12,6 +12,7 @@ from __future__ import print_function
 import argparse
 import numpy as np
 import os
+import re
 import sys
 import time
 
@@ -33,15 +34,66 @@ from astropy.utils import iers
 iers.conf.auto_download = False
 
 
-def _build_mode_deviation_dict(arguments, prefix):
+def _extract_mode_deviation_flags(unknown_arguments, prefix):
+    """Extract `--{prefix}-<mode> <value>` options from unknown CLI args."""
+
+    pattern = re.compile(r'^--{}-(\d+)(?:[,_-](\d+))?$'.format(prefix))
+    parsed_values = {}
+    remaining = []
+    index = 0
+
+    while index < len(unknown_arguments):
+        option = unknown_arguments[index]
+        match = pattern.match(option)
+        if match is None:
+            remaining.append(option)
+            index += 1
+            continue
+
+        if index + 1 >= len(unknown_arguments):
+            raise ValueError('Expected a value after {}.'.format(option))
+
+        raw_l = match.group(1)
+        raw_m = match.group(2)
+        if raw_m is None:
+            if len(raw_l) < 2:
+                raise ValueError(
+                    'Mode {} in {} is ambiguous. Use --{}-l,m format '
+                    '(example: --{}-6,6 0.1).'.format(raw_l, option,
+                                                      prefix, prefix)
+                )
+            mode_l = raw_l[:-1]
+            mode_m = raw_l[-1]
+        else:
+            mode_l = raw_l
+            mode_m = raw_m
+
+        try:
+            value = float(unknown_arguments[index + 1])
+        except ValueError:
+            raise ValueError('Invalid numeric value for {}.'.format(option))
+
+        parsed_values['{},{}'.format(int(mode_l), int(mode_m))] = value
+        index += 2
+
+    return parsed_values, remaining
+
+
+def _build_mode_deviation_dict(arguments, unknown_arguments, prefix):
     """Build a pyseobnr mode deviation dictionary from CLI arguments."""
 
-    mode_keys = ('22', '33', '21', '32', '44', '43', '55')
+    default_modes = ('22', '33', '21', '32', '44', '43', '55')
     result = {}
-    for mode in mode_keys:
-        argument_name = f'{prefix}_{mode}'
-        result[f'{mode[0]},{mode[1]}'] = arguments[argument_name]
-    return result
+    for mode in default_modes:
+        argument_name = '{}_{}'.format(prefix, mode)
+        result['{},{}'.format(mode[0], mode[1])] = arguments[argument_name]
+
+    parsed_dynamic_values, unknown_arguments = _extract_mode_deviation_flags(
+        unknown_arguments,
+        prefix
+    )
+    result.update(parsed_dynamic_values)
+    return result, unknown_arguments
 
 
 # -----------------------------------------------------------------------------
@@ -178,7 +230,27 @@ if __name__ == '__main__':
 
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
-    command_line_arguments = vars(parser.parse_args())
+    parsed_arguments, unknown_arguments = parser.parse_known_args()
+    command_line_arguments = vars(parsed_arguments)
+
+    try:
+        domega_dict, unknown_arguments = _build_mode_deviation_dict(
+            command_line_arguments,
+            unknown_arguments,
+            prefix='domega'
+        )
+        dtau_dict, unknown_arguments = _build_mode_deviation_dict(
+            command_line_arguments,
+            unknown_arguments,
+            prefix='dtau'
+        )
+    except ValueError as error:
+        parser.error(str(error))
+
+    if unknown_arguments:
+        parser.error('unrecognized arguments: {}'.format(
+            ' '.join(unknown_arguments)
+        ))
     
     # Access the detectors argument
     detectors = command_line_arguments['detectors']
@@ -229,14 +301,8 @@ if __name__ == '__main__':
     variable_arguments, static_arguments = read_ini_config(ini_config_path)
     print('Done!\n')
 
-    static_arguments['domega_dict'] = _build_mode_deviation_dict(
-        command_line_arguments,
-        prefix='domega'
-    )
-    static_arguments['dtau_dict'] = _build_mode_deviation_dict(
-        command_line_arguments,
-        prefix='dtau'
-    )
+    static_arguments['domega_dict'] = domega_dict
+    static_arguments['dtau_dict'] = dtau_dict
 
     # -------------------------------------------------------------------------
     # Shortcuts and random seed
