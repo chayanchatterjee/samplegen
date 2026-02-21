@@ -33,6 +33,17 @@ from astropy.utils import iers
 iers.conf.auto_download = False
 
 
+def _build_mode_deviation_dict(arguments, prefix):
+    """Build a pyseobnr mode deviation dictionary from CLI arguments."""
+
+    mode_keys = ('22', '33', '21', '32', '44', '43', '55')
+    result = {}
+    for mode in mode_keys:
+        argument_name = f'{prefix}_{mode}'
+        result[f'{mode[0]},{mode[1]}'] = arguments[argument_name]
+    return result
+
+
 # -----------------------------------------------------------------------------
 # FUNCTION DEFINITIONS
 # -----------------------------------------------------------------------------
@@ -136,6 +147,35 @@ if __name__ == '__main__':
                         help='What type of glitch to add in injection',
                         default=None)
 
+    parser.add_argument('--domega-22', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,2).')
+    parser.add_argument('--domega-33', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,3).')
+    parser.add_argument('--domega-21', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,1).')
+    parser.add_argument('--domega-32', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,2).')
+    parser.add_argument('--domega-44', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,4).')
+    parser.add_argument('--domega-43', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,3).')
+    parser.add_argument('--domega-55', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (5,5).')
+    parser.add_argument('--dtau-22', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,2).')
+    parser.add_argument('--dtau-33', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,3).')
+    parser.add_argument('--dtau-21', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,1).')
+    parser.add_argument('--dtau-32', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,2).')
+    parser.add_argument('--dtau-44', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,4).')
+    parser.add_argument('--dtau-43', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,3).')
+    parser.add_argument('--dtau-55', type=float, default=0.0,
+                        help='Deviation in damping time for mode (5,5).')
+
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
     command_line_arguments = vars(parser.parse_args())
@@ -188,6 +228,15 @@ if __name__ == '__main__':
     print('Reading and validating in INI configuration file...', end=' ')
     variable_arguments, static_arguments = read_ini_config(ini_config_path)
     print('Done!\n')
+
+    static_arguments['domega_dict'] = _build_mode_deviation_dict(
+        command_line_arguments,
+        prefix='domega'
+    )
+    static_arguments['dtau_dict'] = _build_mode_deviation_dict(
+        command_line_arguments,
+        prefix='dtau'
+    )
 
     # -------------------------------------------------------------------------
     # Shortcuts and random seed

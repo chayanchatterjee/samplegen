@@ -21,6 +21,11 @@ from pycbc.detector import Detector
 from pycbc.types.timeseries import TimeSeries
 import math
 
+try:
+    from pyseobnr.generate_waveform import GenerateWaveform
+except ImportError:  # pragma: no cover - optional dependency
+    GenerateWaveform = None
+
 
 # -----------------------------------------------------------------------------
 # CLASS DEFINITIONS
@@ -179,6 +184,10 @@ def get_waveform(static_arguments,
         the simulated waveform, resized to the desired length.
     """
 
+    if static_arguments['approximant'] == 'SEOBNRv5PHM':
+        return get_pseobnr_waveform(static_arguments=static_arguments,
+                                    waveform_params=waveform_params)
+
     # Check if we are using a time domain (TD) or frequency domain (FD)
     # approximant and retrieve the required parameters for the simulation
     if static_arguments['domain'] == 'time':
@@ -292,6 +301,58 @@ def get_waveform(static_arguments,
     # Resize the simulated waveform to the specified length
     h_plus.resize(length)
     h_cross.resize(length)
+
+    return h_plus, h_cross
+
+
+def get_pseobnr_waveform(static_arguments,
+                         waveform_params):
+    """Generate (h_plus, h_cross) using pyseobnr's SEOBNRv5PHM backend."""
+
+    if GenerateWaveform is None:
+        raise ImportError('pyseobnr is required for approximant SEOBNRv5PHM')
+
+    mode_array = static_arguments.get(
+        'mode_array',
+        [(2, 2), (3, 3), (2, 1), (3, 2), (4, 4), (4, 3), (5, 5)]
+    )
+
+    params = {
+        'mass1': waveform_params['mass1'],
+        'mass2': waveform_params['mass2'],
+        'spin1x': waveform_params['spin1x'],
+        'spin1y': waveform_params['spin1y'],
+        'spin1z': waveform_params['spin1z'],
+        'spin2x': waveform_params['spin2x'],
+        'spin2y': waveform_params['spin2y'],
+        'spin2z': waveform_params['spin2z'],
+        'distance': waveform_params.get('distance', static_arguments['distance']),
+        'inclination': waveform_params['inclination'],
+        'phi_ref': waveform_params.get('coa_phase', 0.0),
+        'f22_start': static_arguments['f_lower'],
+        'f_ref': static_arguments['f_lower'],
+        'deltaT': static_arguments['delta_t'],
+        'deltaF': static_arguments['delta_f'],
+        'approximant': static_arguments['approximant'],
+        'ModeArray': mode_array,
+        'domega_dict': static_arguments.get('domega_dict', {}),
+        'dtau_dict': static_arguments.get('dtau_dict', {}),
+    }
+
+    hp_py, hc_py = GenerateWaveform(params).generate_td_polarizations()
+
+    h_plus = TimeSeries(initial_array=np.array(hp_py.data.data[:]),
+                        delta_t=static_arguments['delta_t'],
+                        epoch=float(hp_py.epoch))
+    h_cross = TimeSeries(initial_array=np.array(hc_py.data.data[:]),
+                         delta_t=static_arguments['delta_t'],
+                         epoch=float(hc_py.epoch))
+
+    h_plus = fade_on(h_plus, alpha=static_arguments['tukey_alpha'])
+    h_cross = fade_on(h_cross, alpha=static_arguments['tukey_alpha'])
+
+    h_plus.resize(int(static_arguments['td_length']))
+    h_cross.resize(int(static_arguments['td_length']))
 
     return h_plus, h_cross
 
