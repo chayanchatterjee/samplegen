@@ -35,6 +35,21 @@ python generate_sample.py --config-file default_pSEOBNR.json \
   --dtau-range-modes 22 33 21
 ```
 
+You can also define deviation ranges in `config_files/waveform_params_pSEOBNR.ini` and apply a sampled value to specific modes chosen via argparse:
+
+```ini
+[static_args]
+...
+domega_range = -0.20, 0.20
+dtau_range = -0.10, 0.10
+```
+
+```bash
+python generate_sample.py --config-file default_pSEOBNR.json \
+  --domega-range-modes 22 33 21 \
+  --dtau-range-modes 22 33 21
+```
+
 For each injected template, one `domega` value is sampled uniformly from `domega_range` and applied to all modes passed to `--domega-range-modes`; similarly for `dtau`.
 
 The waveform parameter file `config_files/waveform_params_pSEOBNR.ini` is configured to sample intrinsic parameters from an HDF file via `fromfile`; update the `filename` / `dataset` entries for your posterior file layout.

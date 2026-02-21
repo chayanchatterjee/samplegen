@@ -107,6 +107,78 @@ def _sample_range_value(value_range):
     return np.random.uniform(min_value, max_value)
 
 
+def _parse_mode_keys(raw_modes, prefix):
+    """Parse mode labels from argparse (e.g. "22" or "2,2")."""
+
+    mode_keys = []
+    for raw_mode in raw_modes:
+        normalized = raw_mode.replace('_', ',').replace('-', ',')
+        if ',' in normalized:
+            parts = normalized.split(',')
+            if len(parts) != 2:
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l, mode_m = parts
+        else:
+            if len(normalized) < 2 or not normalized.isdigit():
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l = normalized[:-1]
+            mode_m = normalized[-1]
+
+        mode_keys.append('{},{}'.format(int(mode_l), int(mode_m)))
+
+    return mode_keys
+
+
+def _parse_deviation_range(static_arguments, prefix):
+    """Read a deviation range from static args.
+
+    Supported INI keys in [static_args]:
+      * {prefix}_range = <min>,<max>
+      * {prefix}_range_min = <min>
+        {prefix}_range_max = <max>
+    """
+
+    min_key = '{}_range_min'.format(prefix)
+    max_key = '{}_range_max'.format(prefix)
+    combined_key = '{}_range'.format(prefix)
+
+    if min_key in static_arguments or max_key in static_arguments:
+        if min_key not in static_arguments or max_key not in static_arguments:
+            raise ValueError('Both {} and {} must be set in [static_args].'.format(
+                min_key,
+                max_key
+            ))
+        min_value = float(static_arguments[min_key])
+        max_value = float(static_arguments[max_key])
+    elif combined_key in static_arguments:
+        raw_value = static_arguments[combined_key]
+        pieces = [piece.strip() for piece in re.split(r'[,:\s]+', raw_value)
+                  if piece.strip()]
+        if len(pieces) != 2:
+            raise ValueError('Expected {} to contain exactly two values.'.format(
+                combined_key
+            ))
+        min_value, max_value = map(float, pieces)
+    else:
+        return None
+
+    if min_value > max_value:
+        raise ValueError('{} must satisfy min <= max.'.format(combined_key))
+
+    return min_value, max_value
+
+
+def _sample_range_value(value_range):
+    """Draw a single value uniformly from the given (min, max) range."""
+
+    if value_range is None:
+        return None
+    min_value, max_value = value_range
+    return np.random.uniform(min_value, max_value)
+
+
 # -----------------------------------------------------------------------------
 # FUNCTION DEFINITIONS
 # -----------------------------------------------------------------------------
@@ -210,6 +282,34 @@ if __name__ == '__main__':
                         help='What type of glitch to add in injection',
                         default=None)
 
+    parser.add_argument('--domega-22', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,2).')
+    parser.add_argument('--domega-33', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,3).')
+    parser.add_argument('--domega-21', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,1).')
+    parser.add_argument('--domega-32', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,2).')
+    parser.add_argument('--domega-44', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,4).')
+    parser.add_argument('--domega-43', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,3).')
+    parser.add_argument('--domega-55', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (5,5).')
+    parser.add_argument('--dtau-22', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,2).')
+    parser.add_argument('--dtau-33', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,3).')
+    parser.add_argument('--dtau-21', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,1).')
+    parser.add_argument('--dtau-32', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,2).')
+    parser.add_argument('--dtau-44', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,4).')
+    parser.add_argument('--dtau-43', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,3).')
+    parser.add_argument('--dtau-55', type=float, default=0.0,
+                        help='Deviation in damping time for mode (5,5).')
     parser.add_argument('--domega-range-modes', type=str, nargs='+', default=[],
                         help='Modes to which a sampled domega range value '
                              'from [static_args] should be applied '
@@ -236,11 +336,23 @@ if __name__ == '__main__':
     except ValueError as error:
         parser.error(str(error))
 
-    if command_line_arguments['domega_range_modes'] and domega_range_modes == []:
-        parser.error('Invalid values passed to --domega-range-modes.')
-    if command_line_arguments['dtau_range_modes'] and dtau_range_modes == []:
-        parser.error('Invalid values passed to --dtau-range-modes.')
+    try:
+        domega_range_modes = _parse_mode_keys(
+            command_line_arguments['domega_range_modes'],
+            prefix='domega'
+        )
+        dtau_range_modes = _parse_mode_keys(
+            command_line_arguments['dtau_range_modes'],
+            prefix='dtau'
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
+    if unknown_arguments:
+        parser.error('unrecognized arguments: {}'.format(
+            ' '.join(unknown_arguments)
+        ))
+    
     # Access the detectors argument
     detectors = command_line_arguments['detectors']
 
@@ -296,13 +408,8 @@ if __name__ == '__main__':
     except ValueError as error:
         parser.error(str(error))
 
-    if domega_range is not None and not domega_range_modes:
-        parser.error('domega range is defined in INI, but no modes were passed via --domega-range-modes.')
-    if dtau_range is not None and not dtau_range_modes:
-        parser.error('dtau range is defined in INI, but no modes were passed via --dtau-range-modes.')
-
-    static_arguments['domega_dict'] = {}
-    static_arguments['dtau_dict'] = {}
+    static_arguments['domega_dict'] = domega_dict
+    static_arguments['dtau_dict'] = dtau_dict
 
     # -------------------------------------------------------------------------
     # Shortcuts and random seed
