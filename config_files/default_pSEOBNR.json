@@ -1,7 +1,7 @@
 {
   "random_seed": 128,
   "template_random_seed": 10,
-  "background_data_directory": "O3b_noise_test",
+  "background_data_directory": "/home/chayan.chatterjee/samplegen/O3b_noise_test",
   "dq_bits": [0, 1, 2, 3],
   "inj_bits": [0, 1, 2, 4],
   "waveform_params_file_name": "waveform_params_pSEOBNR.ini",
