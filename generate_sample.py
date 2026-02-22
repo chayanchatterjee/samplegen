@@ -274,11 +274,11 @@ if __name__ == '__main__':
                     default=['H1', 'L1'])
 
 
-    parser.add_argument('--add-glitches-noise', type=str,
+    parser.add_argument('--add_glitches_noise', type=str,
                         help='What type of glitch to add in pure noise',
                         default=None)
     
-    parser.add_argument('--add-glitches-injection', type=str,
+    parser.add_argument('--add_glitches_injection', type=str,
                         help='What type of glitch to add in injection',
                         default=None)
 
@@ -336,22 +336,13 @@ if __name__ == '__main__':
     except ValueError as error:
         parser.error(str(error))
 
-    try:
-        domega_range_modes = _parse_mode_keys(
-            command_line_arguments['domega_range_modes'],
-            prefix='domega'
-        )
-        dtau_range_modes = _parse_mode_keys(
-            command_line_arguments['dtau_range_modes'],
-            prefix='dtau'
-        )
-    except ValueError as error:
-        parser.error(str(error))
 
-    if unknown_arguments:
-        parser.error('unrecognized arguments: {}'.format(
-            ' '.join(unknown_arguments)
-        ))
+    
+
+#    if unknown_arguments:
+#        parser.error('unrecognized arguments: {}'.format(
+#            ' '.join(unknown_arguments)
+#        ))
     
     # Access the detectors argument
     detectors = command_line_arguments['detectors']
@@ -366,7 +357,7 @@ if __name__ == '__main__':
         
     if command_line_arguments['add_glitches_injection'] is not None:
         
-        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_injection']}")
+        print(f"Glitch to add in injection: {command_line_arguments['add_glitches_injection']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
@@ -402,14 +393,60 @@ if __name__ == '__main__':
     variable_arguments, static_arguments = read_ini_config(ini_config_path)
     print('Done!\n')
 
+#    try:
+#        domega_range = _parse_deviation_range(static_arguments, 'domega')
+#        dtau_range = _parse_deviation_range(static_arguments, 'dtau')
+#    except ValueError as error:
+#        parser.error(str(error))
+
+#    static_arguments['domega_dict'] = domega_dict
+#    static_arguments['dtau_dict'] = dtau_dict
+
+
+
     try:
         domega_range = _parse_deviation_range(static_arguments, 'domega')
         dtau_range = _parse_deviation_range(static_arguments, 'dtau')
     except ValueError as error:
         parser.error(str(error))
 
+    # Build per-mode deviation dictionaries from CLI arguments (defaults are 0.0)
+    domega_dict = {
+        '2,2': float(command_line_arguments.get('domega_22', 0.0)),
+        '3,3': float(command_line_arguments.get('domega_33', 0.0)),
+        '2,1': float(command_line_arguments.get('domega_21', 0.0)),
+        '3,2': float(command_line_arguments.get('domega_32', 0.0)),
+        '4,4': float(command_line_arguments.get('domega_44', 0.0)),
+        '4,3': float(command_line_arguments.get('domega_43', 0.0)),
+        '5,5': float(command_line_arguments.get('domega_55', 0.0)),
+    }
+
+    dtau_dict = {
+        '2,2': float(command_line_arguments.get('dtau_22', 0.0)),
+        '3,3': float(command_line_arguments.get('dtau_33', 0.0)),
+        '2,1': float(command_line_arguments.get('dtau_21', 0.0)),
+        '3,2': float(command_line_arguments.get('dtau_32', 0.0)),
+        '4,4': float(command_line_arguments.get('dtau_44', 0.0)),
+        '4,3': float(command_line_arguments.get('dtau_43', 0.0)),
+        '5,5': float(command_line_arguments.get('dtau_55', 0.0)),
+    }
+
+    # Optionally override selected modes with a sampled value from [static_args]
+    if domega_range is not None:
+        sampled_domega = _sample_range_value(domega_range)
+        for mode_key in domega_range_modes:
+            domega_dict[mode_key] = float(sampled_domega)
+
+    if dtau_range is not None:
+        sampled_dtau = _sample_range_value(dtau_range)
+        for mode_key in dtau_range_modes:
+            dtau_dict[mode_key] = float(sampled_dtau)
+
+    # Store for waveform generation
     static_arguments['domega_dict'] = domega_dict
     static_arguments['dtau_dict'] = dtau_dict
+
+ 
 
     # -------------------------------------------------------------------------
     # Shortcuts and random seed
@@ -931,12 +968,12 @@ if __name__ == '__main__':
     if detectors_set == {'H1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
 #        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
-        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor']
     
     elif detectors_set == {'L1'}:
 #        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
 #        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
-        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor']
     
     elif detectors_set == {'H1', 'L1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
@@ -945,10 +982,14 @@ if __name__ == '__main__':
 #        other_keys = ['h1_snr', 'l1_snr', 'scale_factor']
     
 #    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
+    
+        
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
             value = np.array([_[key] for _ in
                               injection_parameters['injection_samples']])
+
+        
         
 #            for i in range(n_samples):
 #                if neglat_seconds > 0:

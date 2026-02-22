@@ -304,6 +304,7 @@ def get_waveform(static_arguments,
 
     return h_plus, h_cross
 
+import math
 
 def get_pseobnr_waveform(static_arguments,
                          waveform_params):
@@ -317,22 +318,39 @@ def get_pseobnr_waveform(static_arguments,
         [(2, 2), (3, 3), (2, 1), (3, 2), (4, 4), (4, 3), (5, 5)]
     )
 
+
+
+    spin1_a = waveform_params['spin1_a']
+    spin2_a = waveform_params['spin2_a']
+    spin1_polar = waveform_params['spin1_polar']
+    spin2_polar = waveform_params['spin2_polar']
+    spin1_azimuthal = waveform_params['spin1_azimuthal']
+    spin2_azimuthal = waveform_params['spin2_azimuthal']
+
+    spin1x = spin1_a * math.sin(spin1_polar) * math.cos(spin1_azimuthal)
+    spin2x = spin2_a * math.sin(spin2_polar) * math.cos(spin2_azimuthal)
+    spin1y = spin1_a * math.sin(spin1_polar) * math.sin(spin1_azimuthal)
+    spin2y = spin2_a * math.sin(spin2_polar) * math.sin(spin2_azimuthal)
+    spin1z = spin1_a * math.cos(spin1_polar)
+    spin2z = spin2_a * math.cos(spin2_polar)
+
+    
     params = {
         'mass1': waveform_params['mass1'],
         'mass2': waveform_params['mass2'],
-        'spin1x': waveform_params['spin1x'],
-        'spin1y': waveform_params['spin1y'],
-        'spin1z': waveform_params['spin1z'],
-        'spin2x': waveform_params['spin2x'],
-        'spin2y': waveform_params['spin2y'],
-        'spin2z': waveform_params['spin2z'],
+        'spin1x': spin1x,
+        'spin1y': spin1y,
+        'spin1z': spin1z,
+        'spin2x': spin2x,
+        'spin2y': spin2y,
+        'spin2z': spin2z,
         'distance': waveform_params.get('distance', static_arguments['distance']),
         'inclination': waveform_params['inclination'],
         'phi_ref': waveform_params.get('coa_phase', 0.0),
         'f22_start': static_arguments['f_lower'],
         'f_ref': static_arguments['f_lower'],
-        'deltaT': static_arguments['delta_t'],
-        'deltaF': static_arguments['delta_f'],
+        'deltaT': 1.0/static_arguments['target_sampling_rate'],
+        'deltaF': 1.0/static_arguments['waveform_length'],
         'approximant': static_arguments['approximant'],
         'ModeArray': mode_array,
         'domega_dict': static_arguments.get('domega_dict', {}),
@@ -342,10 +360,11 @@ def get_pseobnr_waveform(static_arguments,
     hp_py, hc_py = GenerateWaveform(params).generate_td_polarizations()
 
     h_plus = TimeSeries(initial_array=np.array(hp_py.data.data[:]),
-                        delta_t=static_arguments['delta_t'],
+                        delta_t=1.0/static_arguments['target_sampling_rate'],
                         epoch=float(hp_py.epoch))
+    
     h_cross = TimeSeries(initial_array=np.array(hc_py.data.data[:]),
-                         delta_t=static_arguments['delta_t'],
+                         delta_t=1.0/static_arguments['target_sampling_rate'],
                          epoch=float(hc_py.epoch))
 
     h_plus = fade_on(h_plus, alpha=static_arguments['tukey_alpha'])
@@ -363,6 +382,7 @@ def get_pseobnr_waveform(static_arguments,
 def get_detector_signals(static_arguments,
                          waveform_params,
                          event_time,
+                         detector,
                          waveform):
     """
     Project the raw `waveform` (i.e., the tuple `(h_plus, h_cross)`
@@ -430,6 +450,7 @@ def get_detector_signals(static_arguments,
                                               right_ascension=right_ascension,
                                               declination=declination,
                                               t_gps=1187008882.4)
+        
         # Project the waveform onto the antenna pattern
         detector_signal = f_plus * h_plus + f_cross * h_cross
 
