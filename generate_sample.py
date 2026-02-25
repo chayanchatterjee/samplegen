@@ -10,8 +10,10 @@ generate synthetic GW data according to the provided specifications.
 from __future__ import print_function
 
 import argparse
+import copy
 import numpy as np
 import os
+import re
 import sys
 import time
 
@@ -31,6 +33,150 @@ import concurrent.futures
 
 from astropy.utils import iers
 iers.conf.auto_download = False
+
+
+def _parse_mode_keys(raw_modes, prefix):
+    """Parse mode labels from argparse (e.g. "22" or "2,2")."""
+
+    mode_keys = []
+    for raw_mode in raw_modes:
+        normalized = raw_mode.replace('_', ',').replace('-', ',')
+        if ',' in normalized:
+            parts = normalized.split(',')
+            if len(parts) != 2:
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l, mode_m = parts
+        else:
+            if len(normalized) < 2 or not normalized.isdigit():
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l = normalized[:-1]
+            mode_m = normalized[-1]
+
+        mode_keys.append('{},{}'.format(int(mode_l), int(mode_m)))
+
+    return mode_keys
+
+
+def _parse_deviation_range(static_arguments, prefix):
+    """Read a deviation range from static args.
+
+    Supported INI keys in [static_args]:
+      * {prefix}_range = <min>,<max>
+      * {prefix}_range_min = <min>
+        {prefix}_range_max = <max>
+    """
+
+    min_key = '{}_range_min'.format(prefix)
+    max_key = '{}_range_max'.format(prefix)
+    combined_key = '{}_range'.format(prefix)
+
+    if min_key in static_arguments or max_key in static_arguments:
+        if min_key not in static_arguments or max_key not in static_arguments:
+            raise ValueError('Both {} and {} must be set in [static_args].'.format(
+                min_key,
+                max_key
+            ))
+        min_value = float(static_arguments[min_key])
+        max_value = float(static_arguments[max_key])
+    elif combined_key in static_arguments:
+        raw_value = static_arguments[combined_key]
+        pieces = [piece.strip() for piece in re.split(r'[,:\s]+', raw_value)
+                  if piece.strip()]
+        if len(pieces) != 2:
+            raise ValueError('Expected {} to contain exactly two values.'.format(
+                combined_key
+            ))
+        min_value, max_value = map(float, pieces)
+    else:
+        return None
+
+    if min_value > max_value:
+        raise ValueError('{} must satisfy min <= max.'.format(combined_key))
+
+    return min_value, max_value
+
+
+def _sample_range_value(value_range):
+    """Draw a single value uniformly from the given (min, max) range."""
+
+    if value_range is None:
+        return None
+    min_value, max_value = value_range
+    return np.random.uniform(min_value, max_value)
+
+
+def _parse_mode_keys(raw_modes, prefix):
+    """Parse mode labels from argparse (e.g. "22" or "2,2")."""
+
+    mode_keys = []
+    for raw_mode in raw_modes:
+        normalized = raw_mode.replace('_', ',').replace('-', ',')
+        if ',' in normalized:
+            parts = normalized.split(',')
+            if len(parts) != 2:
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l, mode_m = parts
+        else:
+            if len(normalized) < 2 or not normalized.isdigit():
+                raise ValueError('Invalid {} mode value: {}.'.format(prefix,
+                                                                     raw_mode))
+            mode_l = normalized[:-1]
+            mode_m = normalized[-1]
+
+        mode_keys.append('{},{}'.format(int(mode_l), int(mode_m)))
+
+    return mode_keys
+
+
+def _parse_deviation_range(static_arguments, prefix):
+    """Read a deviation range from static args.
+
+    Supported INI keys in [static_args]:
+      * {prefix}_range = <min>,<max>
+      * {prefix}_range_min = <min>
+        {prefix}_range_max = <max>
+    """
+
+    min_key = '{}_range_min'.format(prefix)
+    max_key = '{}_range_max'.format(prefix)
+    combined_key = '{}_range'.format(prefix)
+
+    if min_key in static_arguments or max_key in static_arguments:
+        if min_key not in static_arguments or max_key not in static_arguments:
+            raise ValueError('Both {} and {} must be set in [static_args].'.format(
+                min_key,
+                max_key
+            ))
+        min_value = float(static_arguments[min_key])
+        max_value = float(static_arguments[max_key])
+    elif combined_key in static_arguments:
+        raw_value = static_arguments[combined_key]
+        pieces = [piece.strip() for piece in re.split(r'[,:\s]+', raw_value)
+                  if piece.strip()]
+        if len(pieces) != 2:
+            raise ValueError('Expected {} to contain exactly two values.'.format(
+                combined_key
+            ))
+        min_value, max_value = map(float, pieces)
+    else:
+        return None
+
+    if min_value > max_value:
+        raise ValueError('{} must satisfy min <= max.'.format(combined_key))
+
+    return min_value, max_value
+
+
+def _sample_range_value(value_range):
+    """Draw a single value uniformly from the given (min, max) range."""
+
+    if value_range is None:
+        return None
+    min_value, max_value = value_range
+    return np.random.uniform(min_value, max_value)
 
 
 # -----------------------------------------------------------------------------
@@ -128,17 +274,75 @@ if __name__ == '__main__':
                     default=['H1', 'L1'])
 
 
-    parser.add_argument('--add-glitches-noise', type=str,
+    parser.add_argument('--add_glitches_noise', type=str,
                         help='What type of glitch to add in pure noise',
                         default=None)
     
-    parser.add_argument('--add-glitches-injection', type=str,
+    parser.add_argument('--add_glitches_injection', type=str,
                         help='What type of glitch to add in injection',
                         default=None)
 
+    parser.add_argument('--domega-22', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,2).')
+    parser.add_argument('--domega-33', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,3).')
+    parser.add_argument('--domega-21', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (2,1).')
+    parser.add_argument('--domega-32', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (3,2).')
+    parser.add_argument('--domega-44', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,4).')
+    parser.add_argument('--domega-43', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (4,3).')
+    parser.add_argument('--domega-55', type=float, default=0.0,
+                        help='Deviation in mode frequency for mode (5,5).')
+    parser.add_argument('--dtau-22', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,2).')
+    parser.add_argument('--dtau-33', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,3).')
+    parser.add_argument('--dtau-21', type=float, default=0.0,
+                        help='Deviation in damping time for mode (2,1).')
+    parser.add_argument('--dtau-32', type=float, default=0.0,
+                        help='Deviation in damping time for mode (3,2).')
+    parser.add_argument('--dtau-44', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,4).')
+    parser.add_argument('--dtau-43', type=float, default=0.0,
+                        help='Deviation in damping time for mode (4,3).')
+    parser.add_argument('--dtau-55', type=float, default=0.0,
+                        help='Deviation in damping time for mode (5,5).')
+    parser.add_argument('--domega-range-modes', type=str, nargs='+', default=[],
+                        help='Modes to which a sampled domega range value '
+                             'from [static_args] should be applied '
+                             '(e.g. 22 33 or 2,2 3,3).')
+    parser.add_argument('--dtau-range-modes', type=str, nargs='+', default=[],
+                        help='Modes to which a sampled dtau range value '
+                             'from [static_args] should be applied '
+                             '(e.g. 22 33 or 2,2 3,3).')
+
     # Parse the arguments that were passed when calling this script
     print('Parsing command line arguments...', end=' ')
-    command_line_arguments = vars(parser.parse_args())
+    parsed_arguments = parser.parse_args()
+    command_line_arguments = vars(parsed_arguments)
+
+    try:
+        domega_range_modes = _parse_mode_keys(
+            command_line_arguments['domega_range_modes'],
+            prefix='domega'
+        )
+        dtau_range_modes = _parse_mode_keys(
+            command_line_arguments['dtau_range_modes'],
+            prefix='dtau'
+        )
+    except ValueError as error:
+        parser.error(str(error))
+
+
+    
+
+#    if unknown_arguments:
+#        parser.error('unrecognized arguments: {}'.format(
+#            ' '.join(unknown_arguments)
+#        ))
     
     # Access the detectors argument
     detectors = command_line_arguments['detectors']
@@ -153,7 +357,7 @@ if __name__ == '__main__':
         
     if command_line_arguments['add_glitches_injection'] is not None:
         
-        print(f"Glitch to add in noise: {command_line_arguments['add_glitches_injection']}")
+        print(f"Glitch to add in injection: {command_line_arguments['add_glitches_injection']}")
 
     #    glitch_name = glitch_name.replace(" ", "_").lower()
 
@@ -188,6 +392,61 @@ if __name__ == '__main__':
     print('Reading and validating in INI configuration file...', end=' ')
     variable_arguments, static_arguments = read_ini_config(ini_config_path)
     print('Done!\n')
+
+#    try:
+#        domega_range = _parse_deviation_range(static_arguments, 'domega')
+#        dtau_range = _parse_deviation_range(static_arguments, 'dtau')
+#    except ValueError as error:
+#        parser.error(str(error))
+
+#    static_arguments['domega_dict'] = domega_dict
+#    static_arguments['dtau_dict'] = dtau_dict
+
+
+
+    try:
+        domega_range = _parse_deviation_range(static_arguments, 'domega')
+        dtau_range = _parse_deviation_range(static_arguments, 'dtau')
+    except ValueError as error:
+        parser.error(str(error))
+
+    # Build per-mode deviation dictionaries from CLI arguments (defaults are 0.0)
+    domega_dict = {
+        '2,2': float(command_line_arguments.get('domega_22', 0.0)),
+        '3,3': float(command_line_arguments.get('domega_33', 0.0)),
+        '2,1': float(command_line_arguments.get('domega_21', 0.0)),
+        '3,2': float(command_line_arguments.get('domega_32', 0.0)),
+        '4,4': float(command_line_arguments.get('domega_44', 0.0)),
+        '4,3': float(command_line_arguments.get('domega_43', 0.0)),
+        '5,5': float(command_line_arguments.get('domega_55', 0.0)),
+    }
+
+    dtau_dict = {
+        '2,2': float(command_line_arguments.get('dtau_22', 0.0)),
+        '3,3': float(command_line_arguments.get('dtau_33', 0.0)),
+        '2,1': float(command_line_arguments.get('dtau_21', 0.0)),
+        '3,2': float(command_line_arguments.get('dtau_32', 0.0)),
+        '4,4': float(command_line_arguments.get('dtau_44', 0.0)),
+        '4,3': float(command_line_arguments.get('dtau_43', 0.0)),
+        '5,5': float(command_line_arguments.get('dtau_55', 0.0)),
+    }
+
+    # Optionally override selected modes with a sampled value from [static_args]
+    if domega_range is not None:
+        sampled_domega = _sample_range_value(domega_range)
+        for mode_key in domega_range_modes:
+            domega_dict[mode_key] = float(sampled_domega)
+
+    if dtau_range is not None:
+        sampled_dtau = _sample_range_value(dtau_range)
+        for mode_key in dtau_range_modes:
+            dtau_dict[mode_key] = float(sampled_dtau)
+
+    # Store for waveform generation
+    static_arguments['domega_dict'] = domega_dict
+    static_arguments['dtau_dict'] = dtau_dict
+
+ 
 
     # -------------------------------------------------------------------------
     # Shortcuts and random seed
@@ -326,8 +585,26 @@ if __name__ == '__main__':
         # Only sample waveform parameters if we are making an injection
         waveform_params = next(waveform_parameters) if injection else None
 
+        sample_static_arguments = copy.deepcopy(static_arguments)
+
+        if injection and domega_range is not None and domega_range_modes:
+            sampled_domega = _sample_range_value(domega_range)
+            sample_static_arguments['domega_dict'] = dict(
+                sample_static_arguments['domega_dict']
+            )
+            for mode_key in domega_range_modes:
+                sample_static_arguments['domega_dict'][mode_key] = sampled_domega
+
+        if injection and dtau_range is not None and dtau_range_modes:
+            sampled_dtau = _sample_range_value(dtau_range)
+            sample_static_arguments['dtau_dict'] = dict(
+                sample_static_arguments['dtau_dict']
+            )
+            for mode_key in dtau_range_modes:
+                sample_static_arguments['dtau_dict'][mode_key] = sampled_dtau
+
         # Return all necessary arguments as a dictionary
-        return dict(static_arguments=static_arguments,
+        return dict(static_arguments=sample_static_arguments,
                         event_tuple=next(noise_times),
                         add_glitches_noise=command_line_arguments['add_glitches_noise'],
                         add_glitches_injection=command_line_arguments['add_glitches_injection'],
@@ -691,12 +968,12 @@ if __name__ == '__main__':
     if detectors_set == {'H1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
 #        other_keys = ['h1_signal', 'h1_snr', 'scale_factor', 'psd_noise_h1']
-        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor', 'psd_noise_h1']
+        other_keys = ['h1_signal_whitened', 'h1_snr', 'scale_factor']
     
     elif detectors_set == {'L1'}:
 #        other_keys = ['l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
 #        other_keys = ['l1_signal', 'l1_snr', 'scale_factor', 'psd_noise_l1']
-        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_l1']
+        other_keys = ['l1_signal_whitened', 'l1_snr', 'scale_factor']
     
     elif detectors_set == {'H1', 'L1'}:
 #        other_keys = ['h1_signal', 'h1_signal_whitened', 'h1_snr', 'l1_signal', 'l1_signal_whitened', 'l1_snr', 'scale_factor', 'psd_noise_h1', 'psd_noise_l1']
@@ -705,10 +982,14 @@ if __name__ == '__main__':
 #        other_keys = ['h1_snr', 'l1_snr', 'scale_factor']
     
 #    other_keys = ['h1_signal', 'h1_snr', 'l1_signal', 'l1_snr', 'scale_factor']
+    
+        
     for key in list(variable_arguments + other_keys):
         if injection_parameters['injection_samples']:
             value = np.array([_[key] for _ in
                               injection_parameters['injection_samples']])
+
+        
         
 #            for i in range(n_samples):
 #                if neglat_seconds > 0:
